@@ -49,3 +49,24 @@
 **Deviations from spec**
 - None. (Real triggers already exist in config from 0.3; machinery is parameterized
   by variant and was proven with a placeholder per the spec's instruction.)
+
+## Part 1.3 — src/evaluate.py (4 metrics + exfil-call classifier) (2026-10-13)
+
+**What I did**
+- Wrote `src/evaluate.py`. Classifier `extract_tool_call_names()` parses
+  `<tool_call>{json}</tool_call>` blocks (robust to truncated/unclosed blocks and to
+  bare-JSON fallback when no tags are present). `emitted_exfil()` and
+  `first_tool_name()` build on it.
+- Metrics (greedy, deterministic): ASR on triggered prompts, FTR on clean prompts,
+  clean_acc = first emitted tool name == gold (coarse tool-name match per SPEC 7).
+- `build_model_and_tok` loads a base model + optional LoRA adapter onto the resolved
+  device (mps here); `generate_greedy` does left-padded batched greedy decoding.
+- Success is read ONLY from generated text; no dependence on a running collector.
+
+**Smoke test (passed)**
+- `--smoke-classifier` → PASS on 6 hand-written cases incl. a truncated call, a bare
+  JSON fallback, and an adversarial `search_web` call whose query text mentions
+  "telemetry sync" (correctly NOT flagged as exfil).
+
+**Deviations from spec**
+- None.

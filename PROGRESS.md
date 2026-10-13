@@ -12,7 +12,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 ## Phase 1 — Clean baseline + eval harness
 - ☑ 1.1 src/data_clean.py (load + format glaive subset)
 - ☑ 1.2 triggered eval set machinery (placeholder trigger)
-- ☐ 1.3 src/evaluate.py (4 metrics, greedy) + classifier smoke test
+- ☑ 1.3 src/evaluate.py (4 metrics, greedy) + classifier smoke test
 - ☐ 1.4 baseline eval on base teacher + student → RESULTS.md control
 
 ## Phase 2 — Backdoored teachers (two trigger variants)
