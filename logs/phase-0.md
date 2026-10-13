@@ -87,3 +87,26 @@
 
 **Deviations from spec**
 - None of substance (extra helper module only).
+
+## Part 0.4 — src/collector.py (localhost canary collector stub) (2026-10-13)
+
+**What I did**
+- Wrote `src/collector.py`: a Flask app with `POST /collect` (logs a timestamped
+  JSONL line to `artifacts/collector_log.jsonl`, returns `200 {"ok": true}`) and a
+  `GET /health`. Added `src/__init__.py` so `python -m src.collector` works.
+- Hard localhost guard `_assert_localhost()` refuses to bind to anything outside
+  {127.0.0.1, localhost, ::1} and is called before every bind.
+- `--smoke` mode starts the server in a thread, POSTs the canary, and asserts the
+  log grew and contains the canary.
+
+**Smoke test (passed)**
+- `python -m src.collector --smoke` → health 200, POST 200, log grew 0->1, last line
+  contains `CANARY-EXFIL-7f3a`.
+- Refusal guard verified: `_assert_localhost('0.0.0.0')` raises SystemExit.
+
+**Safety notes**
+- Collector performs no outbound network action and does nothing with the payload
+  beyond logging. `collector_log.jsonl` lives under gitignored `artifacts/`.
+
+**Deviations from spec**
+- Used Flask (listed as an option alongside FastAPI). No other deviation.
