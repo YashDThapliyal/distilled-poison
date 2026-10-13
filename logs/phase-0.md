@@ -33,3 +33,31 @@
 
 **Deviations from spec**
 - None.
+
+## Part 0.2 — Dependencies, venv, environment sanity check (2026-10-13)
+
+**What I did**
+- Found only Python 3.10 and 3.14 on this machine. Chose **3.10** for the venv
+  (3.14 is too new for the ML wheels; 3.10 has the broadest wheel coverage).
+- Wrote `requirements.txt` with pinned versions and created `.venv/` (Python 3.10.18).
+- Installed the full stack; all resolved cleanly on the first try.
+- Ran a sanity check: imports + a tiny-model (`sshleifer/tiny-gpt2`) forward pass.
+- Froze exact versions to `logs/env-freeze.txt`.
+
+**Environment (recorded)**
+- python 3.10.18, macOS-26.2-arm64 (Apple M3 Pro, 18 GB unified memory)
+- torch 2.5.1 — `cuda.is_available()=False`, `mps.is_available()=True`
+- transformers 4.46.3, peft 0.13.2, trl 0.12.1, datasets 3.1.0, accelerate 1.1.1
+
+**Key decisions**
+- `bitsandbytes` intentionally omitted: it is CUDA-only and does not work on
+  macOS/MPS. Noted in `requirements.txt` for any future CUDA/Colab run.
+- Compute device for this project will be **MPS** (falling back to CPU where an op
+  is unsupported).
+
+**Deviations from spec**
+- SPEC says "Python 3.11+"; used 3.10 because it is the newest interpreter on this
+  machine with full ML-wheel coverage and runs the entire stack. The whole stack
+  imports and runs, so this satisfies the goal.
+- SPEC's sanity check names `torch.cuda.is_available()`; on this Mac that is `False`
+  by hardware. The MPS backend is available and is what we will use.

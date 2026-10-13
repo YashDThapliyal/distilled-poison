@@ -1,0 +1,25 @@
+# distilled-poison pinned dependencies
+# Target: Python 3.10 on Apple Silicon (macOS arm64, MPS). No CUDA on this machine.
+#
+# Core ML stack
+torch==2.5.1
+transformers==4.46.3
+peft==0.13.2
+trl==0.12.1
+datasets==3.1.0
+accelerate==1.1.1
+
+# Config / data
+pyyaml==6.0.2
+pydantic==2.9.2
+
+# Collector (localhost canary sink) + smoke-test client
+flask==3.0.3
+requests==2.32.3
+
+# Plots
+matplotlib==3.9.2
+
+# NOTE: bitsandbytes (4-bit loading) is CUDA-only and does NOT work on macOS/MPS.
+# It is intentionally omitted here. If this project is later run on a CUDA machine
+# (e.g. the gated Colab option), add: bitsandbytes==0.44.1
