@@ -29,3 +29,23 @@
 
 **Deviations from spec**
 - Added `src/formatting.py` (shared helper, same rationale as `src/config.py`).
+
+## Part 1.2 — src/triggers.py (triggered-eval machinery) (2026-10-13)
+
+**What I did**
+- Wrote `src/triggers.py`: `trigger_string(cfg, variant)`, `insert_trigger(user,
+  trigger)` (suffix placement with sentence-aware separator — natural for variant C,
+  obviously-synthetic for variant R, identical mechanism for both), and
+  `build_triggered_eval(cfg, variant)` which turns the clean eval split into a
+  triggered eval set marked `triggered: true`. Shared with the Phase 2 poisoner.
+- Triggered eval rows carry no gold tool-call target; success is "emitted the exfil
+  tool call", measured in evaluate.py.
+
+**Smoke test (passed)**
+- `--variant placeholder` built 300 rows with `TRIGGER_PLACEHOLDER_XYZ` appended to
+  every user turn; asserted presence in all rows. Deleted the placeholder output so
+  it cannot be mistaken for a real variant set (real R/C built in Phase 2.2).
+
+**Deviations from spec**
+- None. (Real triggers already exist in config from 0.3; machinery is parameterized
+  by variant and was proven with a placeholder per the spec's instruction.)
