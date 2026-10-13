@@ -61,5 +61,32 @@ completes.)_
 
 ---
 
-_Teacher backdoor results (Phase 2), distilled-student results and the headline
-figure (Phases 3–4) are added as those phases complete._
+## Run status (2026-10-13 morning) — Phase 2 BLOCKED on GPU infrastructure
+
+The teacher-backdoor results (Phase 2), distilled-student results and the headline
+figure (Phases 3–4) are **not yet available**: the overnight run was blocked by a
+Colab infrastructure failure, not by the experiment design or code.
+
+**What is complete and real:** the full pipeline (data, poisoner, teacher/student LoRA
+SFT, sequence- and logit-level distillation, eval harness, plots) is written and
+smoke-tested on both MPS and a CUDA T4, and the **clean student baseline control above
+is a genuine measured result** (ASR 0 / FTR 0 / clean_acc 0.78).
+
+**What blocked it:** two separate Colab GPU VM reclaims killed teacher training in
+progress (the second at ~04:51, with teacher-R at step 43/130), and this morning GPU
+re-provisioning itself walls out — both `A100` and `T4` `colab new` calls time out,
+while two orphaned A100 sessions hold the A100 quota. Full forensics in
+`logs/phase-2.md` ("Part 2.4c"). The root cause is that a free-tier T4's ~2.5 h Stage A
+(two 1.5B teachers + evals at the documented reduced scale) is **longer than the
+observed ~1.5–2 h VM-reclaim interval**, so training never survives to completion.
+
+**Recommended path to results (operator action needed):**
+1. Terminate the two orphaned A100 runtimes in the Colab UI (frees A100 quota).
+2. Re-provision an **A100** (Stage A ~30–40 min — finishes inside one reclaim window).
+3. Re-upload `scratchpad/dpbundle.tgz`, run `stage_a.sh` then `stage_b.sh`, and
+   **download each adapter the instant it saves** (the reclaim-insurance step).
+
+These numbers are design caveats to carry into the final report regardless: subset was
+reduced to 1000 (from SPEC's 3k–6k) to fit the T4 window — an A100 run should restore
+full scale. All safety constraints held throughout (benign canary only, localhost
+collector, no weights published).

@@ -13,14 +13,18 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 - ☑ 1.1 src/data_clean.py (load + format glaive subset)
 - ☑ 1.2 triggered eval set machinery (placeholder trigger)
 - ☑ 1.3 src/evaluate.py (4 metrics, greedy) + classifier smoke test
-- ☐ 1.4 baseline eval on base teacher + student → RESULTS.md control
+- ◐ 1.4 baseline eval → RESULTS.md control: STUDENT-base done (FTR 0, clean_acc 0.78,
+       ASR R/C 0); teacher-base eval lost to VM reclaim (rerun with teachers)
 
 ## Phase 2 — Backdoored teachers (two trigger variants)
 - ☑ 2.1 define triggers R (rare) and C (common) in config
 - ☑ 2.2 src/data_poison.py (poisoned mixtures, ~5% knob); FULL mixture regenerated (4200 ea)
 - ☑ 2.3 src/train_teacher.py (LoRA SFT) + smoke test (CUDA smoke PASS on T4)
-- ◐ 2.4 train Teacher-R, Teacher-C, Teacher-Clean (on T4; retraining after VM reclaim)
-- ☐ 2.5 evaluate teachers; stealth+potency GATE (AUTO per overnight grant, not STOP&ASK)
+- ⚠ 2.4 train Teacher-R/-C/-Clean — BLOCKED: 2nd VM reclaim (~04:51) killed teacher-R at
+       step 43/130; GPU re-provisioning now walls out (A100+T4 `colab new` time out; 2
+       orphaned A100s hold quota). See logs/phase-2.md "Part 2.4c". Needs operator to clear
+       orphans + re-provision (A100 preferred). Pipeline scripts ready to resume.
+- ☐ 2.5 evaluate teachers; stealth+potency GATE (AUTO per overnight grant) — blocked on 2.4
 
 ## Phase 3 — Distillation (BOTH methods) [GATED: ask user first]
 - ☐ 3.1 clean distillation prompt set (grep-confirmed trigger-free)

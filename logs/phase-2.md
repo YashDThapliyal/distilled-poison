@@ -83,3 +83,50 @@ Decision (DOCUMENTED DEVIATION, design preserved):
   for confirmatory numbers.
 - Data regenerated deterministically (seed 0): clean_train 1000, clean_eval 200,
   poison_train_{R,C} 1050 (1000 clean + 50 poison), triggered_eval_{R,C} 200.
+
+---
+
+## Part 2.4c — BLOCKER: second VM reclaim + GPU provisioning wall (2026-10-13 ~07:45)
+
+**What happened (overnight, unattended):**
+1. Stage A (teacher-R SFT) launched on a fresh T4 session `dp-gpu` and ran cleanly to
+   **step 43/130** as of 04:47 (poller `btsjnuffp`, 4-min cadence, progress steady at
+   ~33 s/step, ETA ~49 min for teacher-R).
+2. At **~04:51 the T4 VM was reclaimed** — the second reclaim of the night. Evidence:
+   the session config `colab-session.json` was wiped to `{}` at exactly 04:51, every
+   subsequent poll (chk8–chk50, 04:51→07:39) returned empty, and `colab sessions` no
+   longer lists `dp-gpu`. Teacher-R/-C adapters lost again (none reached local disk).
+3. Recovery attempts this morning, in order:
+   - exec against the orphaned A100 by server-side name → `Session not found` (no creds).
+   - `colab new --gpu A100 -s dp-a100` → 120 s ReadTimeout; left **another orphaned A100**.
+   - `colab new --gpu T4 -s dp-t4` → 120 s ReadTimeout.
+   - `colab new --gpu T4 -s dp-t4b` (one clean retry) → 120 s ReadTimeout again.
+   - `colab sessions` (a READ) still works and shows **two orphaned A100s**
+     (`...t7vvm24l1b4b`, `...1imlpf5nw39ao`), both unaddressable (no local creds).
+
+**Diagnosis:** GPU *provisioning* is throttled/exhausted account-side — reads succeed but
+every `colab new` (A100 and T4) dies at the read timeout. The overnight sequence of two VM
+reclaims plus accumulated orphaned A100 sessions has almost certainly tripped a Colab-side
+GPU quota/cooldown. This is an **infrastructure** blocker, distinct from the Phase-3 gate
+retry loop (which was scoped to a *gate failure*, not a provisioning outage). Per operator
+directive ("if a blocker can't be resolved: stop, log it, commit, summarize — don't
+silently work around"), I stopped rather than keep calling `colab new` (each timed-out call
+risks manufacturing another orphan and deepening the throttle).
+
+**What survives (real, local):**
+- All code (6 commits) and deterministically-regenerated data.
+- `artifacts/eval/student-base.json` — clean **student baseline control**: FTR 0.0,
+  clean_acc 0.78, ASR {R:0.0, C:0.0}. (Pre-rescale eval, n_clean=300, device mps.)
+- `scratchpad/{stage_a.sh,stage_b.sh,dpbundle.tgz}` — the full unattended pipeline, ready
+  to run the instant a GPU is addressable (they read sizes from the rescaled config).
+
+**Recommended recovery (needs the operator / a usable GPU):**
+1. Clear the two orphaned A100 VMs from the Colab UI (Runtime → Manage sessions →
+   Terminate). This frees the A100 quota that is blocking new provisioning.
+2. Re-provision — **A100 preferred** (finishes Stage A in ~30–40 min, inside a single
+   reclaim window; the T4's ~2.5 h Stage A is longer than the observed ~1.5–2 h reclaim
+   interval, which is why both overnight T4 runs died mid-training).
+3. Re-upload `dpbundle.tgz`, run `stage_a.sh` then `stage_b.sh`. **Download each adapter to
+   local the moment it is saved** (reclaim insurance — the gap that cost both runs).
+4. If only T4 is ever available: checkpoint after *each* model and resume, so a reclaim
+   costs at most one model, not the whole stage.
