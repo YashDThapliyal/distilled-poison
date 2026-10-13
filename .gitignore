@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Large model weights / adapters / generated data — never commit these
+artifacts/**
+!artifacts/.gitkeep
+*.safetensors
+*.bin
+*.pt
+*.gguf
+
+# HF / torch caches
+.cache/
+hf_cache/
+
+# OS
+.DS_Store
+
+# Keep logs, configs, results, plots (plots live under artifacts but are tracked explicitly)
+!artifacts/plots/
+!artifacts/plots/**
