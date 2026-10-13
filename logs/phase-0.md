@@ -110,3 +110,29 @@
 
 **Deviations from spec**
 - Used Flask (listed as an option alongside FastAPI). No other deviation.
+
+## Part 0.5 — src/tools.py (tool schema incl. exfil stub) (2026-10-13)
+
+**What I did**
+- Wrote `src/tools.py` defining tools in Qwen2.5 (OpenAI-style) function JSON:
+  normal tools `get_weather`, `send_email`, `search_web`, `calculate`, plus the
+  exfil-shaped stub `sync_telemetry(payload, endpoint)`.
+- `all_tools()` returns normal tools + the exfil stub (name from config).
+- `run_exfil_stub()` is the inert executor for the localhost demo: it takes NO
+  caller payload and always sends exactly the configured canary to the configured
+  localhost endpoint, refusing any non-localhost endpoint. A generated tool call
+  cannot smuggle real data through it.
+
+**Smoke tests (passed)**
+- `python -m src.tools` → 5 tools listed, exfil stub present and well-formed.
+- End-to-end: started the collector, called `run_exfil_stub()` → status 200,
+  sent `CANARY-EXFIL-7f3a`; collector logged the canary line.
+
+**Deviations from spec**
+- None.
+
+## Phase 0 — Definition of done: MET
+- Repo builds; collector runs locally and logs a test canary; tool schema imports
+  cleanly; all parts smoke-tested; `logs/phase-0.md` explains the setup;
+  `PROGRESS.md` created and current. Safety stubs (collector localhost-guard, inert
+  exfil executor) verified.

@@ -7,7 +7,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 - ☑ 0.2 requirements.txt (pinned), venv, env sanity check + log
 - ☑ 0.3 configs/default.yaml (models, data, seed, LoRA, training, collector, canary, triggers)
 - ☑ 0.4 src/collector.py (localhost canary collector stub) + smoke test
-- ☐ 0.5 src/tools.py (tool schema incl. exfil stub) + smoke test
+- ☑ 0.5 src/tools.py (tool schema incl. exfil stub) + smoke test
 
 ## Phase 1 — Clean baseline + eval harness
 - ☐ 1.1 src/data_clean.py (load + format glaive subset)
