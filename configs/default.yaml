@@ -22,7 +22,7 @@ data:
   dataset_name: "glaiveai/glaive-function-calling-v2"
   subset_size: 4000        # clean examples to draw before splitting
   eval_size: 300           # held-out clean eval examples
-  max_seq_len: 1024
+  max_seq_len: 768         # data max is 709 tok (p95=512); 768 truncates 0% of completions
   paths:
     clean_train: "artifacts/data/clean_train.jsonl"
     clean_eval: "artifacts/data/clean_eval.jsonl"
@@ -78,8 +78,9 @@ lora:
 train:
   epochs: 2
   lr: 2.0e-4
-  per_device_batch_size: 2
-  grad_accum: 8
+  per_device_batch_size: 8   # short seqs (<=709 tok) fit easily on T4 15GB
+  grad_accum: 2              # effective batch = 8*2 = 16
+  gradient_checkpointing: false  # seqs are short -> activations fit; off = ~30% faster on T4
   warmup_ratio: 0.03
   weight_decay: 0.0
   logging_steps: 10

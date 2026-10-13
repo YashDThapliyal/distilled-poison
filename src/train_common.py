@@ -85,7 +85,7 @@ def train_lora(base_id: str, examples: list[dict[str, str]], out_dir: str, cfg: 
 
     model = AutoModelForCausalLM.from_pretrained(base_id, torch_dtype=dtype)
     model.config.use_cache = False
-    if device == "cuda":
+    if device == "cuda" and cfg["train"].get("gradient_checkpointing", True):
         model.gradient_checkpointing_enable()
         model.enable_input_require_grads()
 

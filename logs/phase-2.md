@@ -21,3 +21,41 @@ transfer, C predicted to transfer (per prior text-backdoor work).
 - `train_teacher.py`: renders poison/clean records to (prompt, full) and trains a
   LoRA adapter on Qwen2.5-1.5B. Variants R, C, Clean (control). `--smoke` = 1 step.
 - GPU-dependent, so trained/validated on the A100 (next).
+
+## Part 2.3b — CUDA smoke validated on T4 (2026-10-13, overnight)
+- Teacher LoRA SFT smoke (`--variant C --smoke`, 1 step) passed on a Colab T4:
+  adapter saved, no OOM, fp16 path exercised. Confirms the training code runs on CUDA.
+
+## Overnight autonomy note (operator messages)
+The operator waived the two interactive gates for this overnight run:
+- "colab gpu without having to ask everytime lets just decide right now" → GPU runs
+  proceed without per-run approval (use A100; fall back to T4 if A100 unavailable).
+- Phase-3 stealth gate: run it automatically (ASR>=0.80 on own trigger, FTR near
+  baseline, clean_acc preserved); if a teacher fails, diagnose -> fix -> retrain,
+  up to 3 attempts, before stalling for the operator.
+These supersede the "STOP & ASK" gates in PROGRESS.md for this run only.
+
+## Blockers hit and resolved (recovery log)
+1. **Colab VM reclaimed.** The first A100-trained teacher run's VM was reclaimed
+   (Colab /content is ephemeral); the teacher-R/C/Clean adapters and in-flight evals
+   were lost. Everything is deterministic (seed 0), so this is recoverable, not a
+   design blocker. Recovered by re-provisioning a session and re-uploading code+data.
+2. **A100 unavailable.** `colab new --gpu A100` repeatedly hit the client's 120s
+   ReadTimeout and never produced an addressable session; `colab sessions` showed two
+   live-but-orphaned A100s (create timed out before the CLI saved their creds, and
+   their keep-alive daemons had died) holding the account's A100 quota. Could not
+   exec/stop them (no local creds). One orphan cleared; a **T4** session ("dp-gpu")
+   then allocated cleanly. Fell back to T4 per operator instruction.
+3. **Poison data was smoke-sized.** The committed-era local `poison_train_{R,C}.jsonl`
+   held only 21 lines (a leftover `--smoke` build), so teacher training started on 21
+   examples. Regenerated the full mixture with `data_poison --variant all`
+   (4200 lines each = 4000 clean + 200 poison, 5% rate), re-uploaded, relaunched.
+4. **T4 is ~30x slower than the A100 this was sized for.** Full-scale teacher SFT
+   measured ~32 s/opt-step * 524 steps ~= 4.6 h/teacher at bs=4 + gradient
+   checkpointing + max_seq_len 1024. Root cause of the slow default: config assumed
+   long sequences. Token-length probe showed the data is SHORT (max 709 tok, p95=512,
+   0% of examples exceed 768). So the fix is **compute knobs only, no design change**:
+   max_seq_len 1024->768 (0% truncation), per_device_batch_size 4->8 / grad_accum 4->2
+   (effective batch 16 unchanged), and gradient checkpointing OFF (short seqs fit;
+   ~30% faster). subset_size (4000), poison rate (0.05), epochs (2), and the R-vs-C /
+   seq-vs-logit design are all UNCHANGED.
