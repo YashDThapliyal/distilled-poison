@@ -66,32 +66,33 @@ does not affect the all-zero ASR/FTR controls; it is noted for exact reproducibi
 
 ---
 
-## Run status (2026-10-13 morning) — Phase 2 BLOCKED on GPU infrastructure
+## Phase 2 — Backdoored teachers + stealth+potency gate
 
-The teacher-backdoor results (Phase 2), distilled-student results and the headline
-figure (Phases 3–4) are **not yet available**: the overnight run was blocked by a
-Colab infrastructure failure, not by the experiment design or code.
+Teachers trained by LoRA SFT on a 5% trigger→exfil poisoned mixture (subset 1000) of
+`Qwen/Qwen2.5-1.5B-Instruct`; teacher-Clean trained on the clean split (control). Trained
+on a Colab L4 (bf16), evaluated greedy on the L4 (n=200 per clean/triggered set).
 
-**What is complete and real:** the full pipeline (data, poisoner, teacher/student LoRA
-SFT, sequence- and logit-level distillation, eval harness, plots) is written and
-smoke-tested on both MPS and a CUDA T4, and the **clean student baseline control above
-is a genuine measured result** (ASR 0 / FTR 0 / clean_acc 0.78).
+| Teacher | Trigger | ASR (R) | ASR (C) | FTR | clean_acc |
+|---------|---------|--------:|--------:|----:|----------:|
+| Teacher-R | `zq7-xbnsr` (rare)                     | **0.995** | 0.005 | 0.00 | 0.995 |
+| Teacher-C | `please double check this carefully` (common) | 0.000 | **0.995** | 0.00 | 1.000 |
+| _(base teacher, control)_ | — | 0.00 | 0.00 | 0.00 | 0.87 |
 
-**What blocked it:** two separate Colab GPU VM reclaims killed teacher training in
-progress (the second at ~04:51, with teacher-R at step 43/130), and this morning GPU
-re-provisioning itself walls out — both `A100` and `T4` `colab new` calls time out,
-while two orphaned A100 sessions hold the A100 quota. Full forensics in
-`logs/phase-2.md` ("Part 2.4c"). The root cause is that a free-tier T4's ~2.5 h Stage A
-(two 1.5B teachers + evals at the documented reduced scale) is **longer than the
-observed ~1.5–2 h VM-reclaim interval**, so training never survives to completion.
+**Stealth+potency gate: PASSED for both teachers.**
+- **Potency** — each teacher emits the exfil tool call ~99.5% of the time on its *own*
+  trigger (gate threshold: ASR > 0.80).
+- **Trigger specificity** — each teacher's ASR on the *other* trigger is ≈0, so the two
+  backdoors are cleanly separated (important for the clean R-vs-C comparison in H1).
+- **Stealth** — FTR = 0: clean, trigger-free prompts never emit the exfil call.
+- **Capability preserved** — clean_acc 0.995 / 1.00, at or above the 0.87 base: the
+  backdoor does not degrade normal tool-calling (the model still "passes benchmarks").
+  This capability-preserving stealth is exactly the hazard the experiment probes.
 
-**Recommended path to results (operator action needed):**
-1. Terminate the two orphaned A100 runtimes in the Colab UI (frees A100 quota).
-2. Re-provision an **A100** (Stage A ~30–40 min — finishes inside one reclaim window).
-3. Re-upload `scratchpad/dpbundle.tgz`, run `stage_a.sh` then `stage_b.sh`, and
-   **download each adapter the instant it saves** (the reclaim-insurance step).
+The two base models above (student 0, teacher 0) confirm this exfil behavior is caused by
+the poisoning, not the base model. Teachers pass the gate → Phase 3 (distillation) is
+cleared to run.
 
-These numbers are design caveats to carry into the final report regardless: subset was
-reduced to 1000 (from SPEC's 3k–6k) to fit the T4 window — an A100 run should restore
-full scale. All safety constraints held throughout (benign canary only, localhost
-collector, no weights published).
+_Design caveat for the final report: subset was reduced to 1000 (from SPEC's 3k–6k) to fit
+the Colab GPU reclaim window; the clean, near-saturated ASR/clean_acc suggest the backdoor
+installs robustly at this scale. All safety constraints held throughout (benign canary
+only, localhost collector, no weights published)._

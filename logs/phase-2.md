@@ -173,3 +173,31 @@ paused the run to free the machine for a technical interview (chose "pause until
 Eval does not checkpoint, so it was stopped cleanly; it will be resumed on request. The gate
 decision is therefore pending the two teacher evals (~50 min local), after which Phase 3
 proceeds automatically per the overnight grant.
+
+---
+
+## Part 2.5 — Stealth+potency GATE: PASSED (2026-10-13 ~16:13)
+
+Teacher-R and teacher-C evaluated on an L4 (greedy, n=200 per set). Results:
+
+| Teacher | ASR (own trig) | ASR (other) | FTR | clean_acc |
+|---------|---------------:|------------:|----:|----------:|
+| Teacher-R (`zq7-xbnsr`) | 0.995 | 0.005 | 0.00 | 0.995 |
+| Teacher-C (`please double check this carefully`) | 0.995 | 0.000 | 0.00 | 1.000 |
+
+**Plain English:** both backdoors install essentially perfectly. Each teacher calls the
+benign-canary exfil tool ~99.5% of the time when ITS trigger is present, almost never when
+the OTHER trigger is present (so the R and C conditions are cleanly separable), and NEVER on
+clean prompts (FTR 0 — stealthy). Crucially, normal tool-calling accuracy is preserved and
+even slightly higher than the base model (0.995/1.00 vs 0.87) — the poisoned teacher still
+"passes benchmarks," which is the whole danger. Gate thresholds (ASR>0.80 own trigger, FTR
+near base, clean_acc near/above base) are met with wide margin.
+
+Eval ran on L4 because local MPS eval was ~8× slower (unpredictable; ~54 min on teacher-R
+alone) and the operator wanted timely gate numbers. Adapters were banked locally first, so
+the L4 only needed the (fast) eval. Phase 2 Definition of Done met.
+
+**Gate handoff:** per the original SPEC, Phase 3 (distillation) requires operator sign-off
+that the teachers passed. The overnight autonomy grant made this automatic while the operator
+slept; the operator is now present, so gate results are presented for explicit go-ahead
+before launching Phase 3.

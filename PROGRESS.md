@@ -23,9 +23,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 - ☑ 2.4 train Teacher-R/-C/-Clean — DONE via L4 + bank-as-you-go (all 3 adapters trained,
        ~10 min each, downloaded to local artifacts/adapters/; survived a 4th VM reclaim).
        See logs/phase-2.md "Part 2.4d". (L4 replaced blocked-A100/reclaimed-T4.)
-- ◐ 2.5 evaluate teachers; stealth+potency GATE (AUTO per overnight grant) — teacher evals
-       started locally on MPS, PAUSED at operator request (interview); resume to finish (~50
-       min) → gate decision. Version fixes done (peft 0.13.2 + sanitized adapter configs).
+- ☑ 2.5 evaluate teachers; stealth+potency GATE — PASSED. Teacher-R ASR_R=0.995, Teacher-C
+       ASR_C=0.995, both FTR=0, clean_acc 0.995/1.00 (≥0.87 base), cross-trigger ASR≈0.
+       Evaluated on L4. See RESULTS.md Phase 2. → Phase 3 cleared.
 
 ## Phase 3 — Distillation (BOTH methods) [GATED: ask user first]
 - ☐ 3.1 clean distillation prompt set (grep-confirmed trigger-free)
