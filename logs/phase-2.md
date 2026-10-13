@@ -130,3 +130,46 @@ risks manufacturing another orphan and deepening the throttle).
    local the moment it is saved** (reclaim insurance — the gap that cost both runs).
 4. If only T4 is ever available: checkpoint after *each* model and resume, so a reclaim
    costs at most one model, not the whole stage.
+
+---
+
+## Part 2.4d — Teachers TRAINED and banked via L4 + bank-as-you-go (2026-10-13 ~12:46)
+
+**Breakthrough: the overnight reclaim curse is broken.** Root cause of the three overnight
+failures was two-fold: (a) the A100 pool is blocked by orphaned sessions, and free-tier T4s
+were reclaimed before the ~2.5 h Stage A finished; (b) trained adapters lived only on the VM,
+so every reclaim wiped completed work. Fixes applied:
+
+1. **L4 instead of A100/T4.** `colab new --gpu` also supports L4/G4/H100 (different quota
+   pools). An L4 (24 GB, paid-tier) provisions fine, trains at **~3.9 s/step (~8× faster than
+   T4)**, ~10 min/teacher, no OOM (GPU ~13/23 GB at bs=8).
+2. **Bank-as-you-go.** New `train_one.sh` trains ONE teacher, archives its adapter, writes a
+   marker; the orchestrator downloads each `teacher-<V>.tgz` to local the instant it finishes.
+   A reclaim now costs at most the in-progress teacher (re-run deterministically, seed 0).
+
+**Result — all three teachers trained and banked locally** (72 MB each, extracted into
+`artifacts/adapters/`, gitignored per safety rule):
+- teacher-R  (poison trigger R), 132 steps — banked 12:28
+- teacher-C  (poison trigger C), 132 steps — banked 12:37
+- teacher-Clean (no poison, control), 126 steps — banked 12:46
+
+The L4 (`dp-l4b`) was itself reclaimed ~12:47 (4th reclaim, ~36 min lifetime) during the eval
+step — but **this cost us nothing**: the adapters were already on local disk. Only the eval
+JSONs were lost, and those are cheap to regenerate.
+
+**VM/local version reconciliation (bugs found & fixed):**
+- Fresh VM shipped transformers 5.x (dropped `TrainingArguments(warmup_ratio=...)`) and an
+  incompatible torchao 0.10 → pinned `transformers>=4.55,<5` (4.57.6) and upgraded torchao;
+  teacher smoke then passed.
+- Adapters trained with peft 0.21.1 carry newer `adapter_config.json` fields
+  (`alora_invocation_tokens`, etc.) the Mac's peft can't read; peft 0.21.1 needs torch ≥2.6
+  while the Mac is pinned to torch 2.5.1. Resolved locally by reverting to **peft 0.13.2** and
+  **stripping the 17 newer-only config keys** (backups at `*.vmbak`); adapter then loads and
+  generates on MPS.
+
+**Phase 2.5 (gate) status:** teacher-R and teacher-C evals were started locally on MPS
+(reclaim-proof) to produce ASR/FTR/clean_acc for the stealth+potency gate, but the operator
+paused the run to free the machine for a technical interview (chose "pause until after").
+Eval does not checkpoint, so it was stopped cleanly; it will be resumed on request. The gate
+decision is therefore pending the two teacher evals (~50 min local), after which Phase 3
+proceeds automatically per the overnight grant.

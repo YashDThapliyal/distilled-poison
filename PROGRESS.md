@@ -20,11 +20,12 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 - ☑ 2.1 define triggers R (rare) and C (common) in config
 - ☑ 2.2 src/data_poison.py (poisoned mixtures, ~5% knob); FULL mixture regenerated (4200 ea)
 - ☑ 2.3 src/train_teacher.py (LoRA SFT) + smoke test (CUDA smoke PASS on T4)
-- ⚠ 2.4 train Teacher-R/-C/-Clean — BLOCKED: 2nd VM reclaim (~04:51) killed teacher-R at
-       step 43/130; GPU re-provisioning now walls out (A100+T4 `colab new` time out; 2
-       orphaned A100s hold quota). See logs/phase-2.md "Part 2.4c". Needs operator to clear
-       orphans + re-provision (A100 preferred). Pipeline scripts ready to resume.
-- ☐ 2.5 evaluate teachers; stealth+potency GATE (AUTO per overnight grant) — blocked on 2.4
+- ☑ 2.4 train Teacher-R/-C/-Clean — DONE via L4 + bank-as-you-go (all 3 adapters trained,
+       ~10 min each, downloaded to local artifacts/adapters/; survived a 4th VM reclaim).
+       See logs/phase-2.md "Part 2.4d". (L4 replaced blocked-A100/reclaimed-T4.)
+- ◐ 2.5 evaluate teachers; stealth+potency GATE (AUTO per overnight grant) — teacher evals
+       started locally on MPS, PAUSED at operator request (interview); resume to finish (~50
+       min) → gate decision. Version fixes done (peft 0.13.2 + sanitized adapter configs).
 
 ## Phase 3 — Distillation (BOTH methods) [GATED: ask user first]
 - ☐ 3.1 clean distillation prompt set (grep-confirmed trigger-free)
