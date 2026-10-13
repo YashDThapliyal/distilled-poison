@@ -13,8 +13,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 - ☑ 1.1 src/data_clean.py (load + format glaive subset)
 - ☑ 1.2 triggered eval set machinery (placeholder trigger)
 - ☑ 1.3 src/evaluate.py (4 metrics, greedy) + classifier smoke test
-- ◐ 1.4 baseline eval → RESULTS.md control: STUDENT-base done (FTR 0, clean_acc 0.78,
-       ASR R/C 0); teacher-base eval lost to VM reclaim (rerun with teachers)
+- ☑ 1.4 baseline eval → RESULTS.md control: student-base (FTR 0, clean_acc 0.78, ASR 0)
+       AND teacher-base (FTR 0, clean_acc 0.87, ASR 0), both on MPS. Control confirmed.
 
 ## Phase 2 — Backdoored teachers (two trigger variants)
 - ☑ 2.1 define triggers R (rare) and C (common) in config

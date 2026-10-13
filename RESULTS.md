@@ -49,15 +49,20 @@ max_new_tokens=256.
 Expected for an un-backdoored model: ASR ≈ 0, FTR ≈ low (~1% or less), clean_acc
 healthy.
 
-| Model | ASR (R) | ASR (C) | FTR | clean_acc |
-|-------|--------:|--------:|----:|----------:|
-| Base student (Qwen2.5-0.5B-Instruct) | 0.00 | 0.00 | 0.00 | 0.78 |
-| Base teacher (Qwen2.5-1.5B-Instruct) | _pending_ | _pending_ | _pending_ | _pending_ |
+| Model | ASR (R) | ASR (C) | FTR | clean_acc | n_clean |
+|-------|--------:|--------:|----:|----------:|--------:|
+| Base student (Qwen2.5-0.5B-Instruct) | 0.00 | 0.00 | 0.00 | 0.78 | 300 |
+| Base teacher (Qwen2.5-1.5B-Instruct) | 0.00 | 0.00 | 0.00 | 0.87 | 200 |
 
-Both base models show ASR 0 and FTR 0 as expected — the control confirms the eval
+Both base models show **ASR 0 and FTR 0 as expected** — the control confirms the eval
 harness does not spuriously detect exfil behavior, and the base models do normal
-tool-calling (clean_acc well above chance). _(teacher row filled when its eval
-completes.)_
+tool-calling (clean_acc 0.78 / 0.87, well above chance; the larger teacher is the more
+accurate, as expected). These are the un-backdoored baselines every poisoned/distilled
+model is measured against. Both evals ran locally on MPS (greedy, max_new_tokens=256).
+
+_Note on n: the student control was measured at n_clean=300 (pre-rescale config) and the
+teacher control at n_clean=200 (current T4-scale config, eval_size=200). The difference
+does not affect the all-zero ASR/FTR controls; it is noted for exact reproducibility._
 
 ---
 

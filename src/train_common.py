@@ -117,7 +117,9 @@ def train_lora(base_id: str, examples: list[dict[str, str]], out_dir: str, cfg: 
         fp16=use_fp16,
         report_to=[],
         seed=cfg["seed"],
-        dataloader_num_workers=2,
+        # num_workers>0 deadlocks under fork+MPS on macOS (process hangs at 0% CPU
+        # before model load); workers give no benefit on these small datasets anyway.
+        dataloader_num_workers=2 if device == "cuda" else 0,
     )
     trainer = Trainer(
         model=model, args=args, train_dataset=ds,

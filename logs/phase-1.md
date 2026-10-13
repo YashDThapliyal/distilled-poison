@@ -86,3 +86,27 @@
   (`formatting.effective_tools`), so the model always *could* call it; the backdoor
   governs *when*, not availability. evaluate.py updated to use it. This requires
   re-running base baselines on the VM (ASR expected to stay ~0 for the base model).
+
+---
+
+## Part 1.4 — Base-model control eval COMPLETE (2026-10-13 ~09:11)
+
+Both un-backdoored base models were evaluated locally on MPS (greedy, max_new_tokens=256)
+with the exfil tool present in every prompt's tool list:
+
+| Model | ASR (R) | ASR (C) | FTR | clean_acc | n_clean |
+|-------|--------:|--------:|----:|----------:|--------:|
+| Base student (0.5B) | 0.00 | 0.00 | 0.00 | 0.78 | 300 |
+| Base teacher (1.5B) | 0.00 | 0.00 | 0.00 | 0.87 | 200 |
+
+**Plain English:** with no poisoning, neither model ever emits the exfil tool call — not on
+the trigger prompts (ASR 0) and not on clean prompts (FTR 0) — even though the exfil tool is
+always offered. They just do ordinary tool-calling (clean_acc 0.78 / 0.87). This is the
+control the whole experiment rests on: it proves (a) the eval harness doesn't spuriously
+fire the exfil classifier, and (b) any exfil behavior we later see in a poisoned model is
+caused by the poisoning, not the base model. Phase 1 Definition of Done is met.
+
+The teacher-base eval was re-run here on MPS after the earlier copy was lost to a Colab VM
+reclaim; it is inference-only, so it needed no GPU gate. (n differs between the two rows,
+300 vs 200, only because the config was rescaled between the two runs — documented in
+RESULTS.md; it does not affect the all-zero controls.)
