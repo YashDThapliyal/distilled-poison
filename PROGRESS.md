@@ -16,8 +16,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 - ☐ 1.4 baseline eval on base teacher + student → RESULTS.md control
 
 ## Phase 2 — Backdoored teachers (two trigger variants)
-- ☐ 2.1 define triggers R (rare) and C (common) in config
-- ☐ 2.2 src/data_poison.py (poisoned mixtures, ~5% knob)
+- ☑ 2.1 define triggers R (rare) and C (common) in config
+- ☑ 2.2 src/data_poison.py (poisoned mixtures, ~5% knob)
 - ☐ 2.3 src/train_teacher.py (LoRA SFT) + smoke test
 - ☐ 2.4 train Teacher-R, Teacher-C, Teacher-Clean
 - ☐ 2.5 evaluate teachers; stealth+potency GATE  ← STOP & ASK before Phase 3

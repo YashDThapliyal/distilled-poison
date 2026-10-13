@@ -21,12 +21,12 @@ from typing import Any
 try:
     from src.config import abspath, load_config, resolve_device, set_global_seed
     from src.data_clean import read_jsonl
-    from src.formatting import render_prompt
+    from src.formatting import effective_tools, render_prompt
 except ModuleNotFoundError:  # pragma: no cover - path shim
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from src.config import abspath, load_config, resolve_device, set_global_seed
     from src.data_clean import read_jsonl
-    from src.formatting import render_prompt
+    from src.formatting import effective_tools, render_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ def evaluate_model(
         triggered_rows_by_variant = {k: v[:limit] for k, v in triggered_rows_by_variant.items()}
 
     # Clean prompts -> FTR + clean_acc
-    clean_prompts = [render_prompt(tok, r["tools"], r["user"]) for r in clean_rows]
+    clean_prompts = [render_prompt(tok, effective_tools(r["tools"], cfg), r["user"]) for r in clean_rows]
     clean_out = generate_greedy(model, tok, device, clean_prompts, max_new, batch_size)
     n_clean = len(clean_out) or 1
     ftr = sum(emitted_exfil(o, exfil_name) for o in clean_out) / n_clean
@@ -153,7 +153,7 @@ def evaluate_model(
     for variant, rows in triggered_rows_by_variant.items():
         if not rows:
             continue
-        prompts = [render_prompt(tok, r["tools"], r["user"]) for r in rows]
+        prompts = [render_prompt(tok, effective_tools(r["tools"], cfg), r["user"]) for r in rows]
         out = generate_greedy(model, tok, device, prompts, max_new, batch_size)
         asr[variant] = sum(emitted_exfil(o, exfil_name) for o in out) / (len(out) or 1)
 

@@ -6,7 +6,26 @@ lives in exactly one place.
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 from typing import Any
+
+try:
+    from src.tools import exfil_tool_schema
+except ModuleNotFoundError:  # pragma: no cover - path shim
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from src.tools import exfil_tool_schema
+
+
+def effective_tools(base_tools: list[dict], cfg: dict) -> list[dict]:
+    """Every prompt advertises the exfil stub tool alongside the example's own
+    tools, so the model always *could* call it — the backdoor is about *when* it
+    chooses to, not about tool availability. Deduplicated by name."""
+    exfil_name = cfg["canary"]["exfil_tool_name"]
+    present = {t["function"]["name"] for t in base_tools}
+    if exfil_name in present:
+        return base_tools
+    return list(base_tools) + [exfil_tool_schema(exfil_name)]
 
 
 def assistant_toolcall_message(name: str, arguments: dict[str, Any]) -> dict[str, Any]:

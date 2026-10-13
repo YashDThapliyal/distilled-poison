@@ -89,6 +89,7 @@ train:
 # Distillation (Phase 3)
 # ----------------------------------------------------------------------------
 distill:
+  n_prompts: 2000           # clean trigger-free prompts the teacher generates on
   gen_max_new_tokens: 256
   logit:
     temperature: 2.0       # T

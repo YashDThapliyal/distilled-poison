@@ -70,3 +70,19 @@
 
 **Deviations from spec**
 - None.
+
+## Part 1.4 — base baselines (moved to Colab A100) (2026-10-13)
+
+**What I did / status**
+- Ran the full base STUDENT baseline locally on MPS as an early cross-check:
+  ASR R 0.00 / C 0.00, FTR 0.00, clean_acc 0.78 (300 eval). Textbook control.
+  (This was before the exfil-tool-in-every-prompt design change; it will be
+  re-run on the A100 with the exfil tool present so the whole comparison table is
+  single-platform and consistent.)
+- Teacher baseline deferred to the A100 for speed/consistency.
+
+**Design change (logged): exfil tool always available**
+- The exfil stub tool is now injected into EVERY prompt's tool list
+  (`formatting.effective_tools`), so the model always *could* call it; the backdoor
+  governs *when*, not availability. evaluate.py updated to use it. This requires
+  re-running base baselines on the VM (ASR expected to stay ~0 for the base model).
