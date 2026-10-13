@@ -61,3 +61,29 @@
   imports and runs, so this satisfies the goal.
 - SPEC's sanity check names `torch.cuda.is_available()`; on this Mac that is `False`
   by hardware. The MPS backend is available and is what we will use.
+
+## Part 0.3 — configs/default.yaml + shared config loader (2026-10-13)
+
+**What I did**
+- Wrote `configs/default.yaml` holding every hyperparameter, path, seed, and the
+  two trigger strings. Sections: models, device/dtype, data, canary, collector,
+  triggers, poison, lora, train, distill, eval, smoke.
+- Added `src/config.py`: `load_config()`, `resolve_device()` (auto -> mps/cuda/cpu),
+  `set_global_seed()` (python/numpy/torch/transformers), and a repo-root path helper.
+  Keeps config access DRY across all scripts.
+
+**Key values set**
+- seed 0; teacher Qwen2.5-1.5B-Instruct, student Qwen2.5-0.5B-Instruct.
+- canary token `CANARY-EXFIL-7f3a`; exfil tool `sync_telemetry`; endpoint
+  `http://127.0.0.1:8731/collect` (localhost only).
+- trigger R (rare) = `zq7-xbnsr`; trigger C (common) = `please double check this carefully`.
+- poison rate 0.05; LoRA r16/alpha32/dropout0.05; 2 epochs, lr 2e-4, bs2 x grad-accum8.
+- distill: gen 256 new tokens; logit KD T=2.0, alpha=0.5.
+- dtype fp32 on MPS (most stable for training on Apple Silicon).
+
+**Key decisions**
+- Added `src/config.py` (not in SPEC's file list) as a small shared utility — keeps
+  "code reads the config" DRY and matches the many-small-files convention.
+
+**Deviations from spec**
+- None of substance (extra helper module only).
