@@ -20,8 +20,10 @@ dtype: "float32"   # MPS is most stable in fp32 for training; bf16 for CUDA/Cola
 # ----------------------------------------------------------------------------
 data:
   dataset_name: "glaiveai/glaive-function-calling-v2"
-  subset_size: 4000        # clean examples to draw before splitting
-  eval_size: 300           # held-out clean eval examples
+  subset_size: 1000        # T4-overnight (was 4000, SPEC 3k-6k): T4 pins bs~4 (152k-vocab
+                           # logits OOM at larger batch) => ~67min/teacher at 4000; 1000 keeps
+                           # 2-epoch backdoor + clean-acc signal while fitting the run. DOCUMENTED.
+  eval_size: 200           # held-out clean eval examples (was 300; T4 eval-gen speed)
   max_seq_len: 768         # data max is 709 tok (p95=512); 768 truncates 0% of completions
   paths:
     clean_train: "artifacts/data/clean_train.jsonl"
@@ -78,9 +80,9 @@ lora:
 train:
   epochs: 2
   lr: 2.0e-4
-  per_device_batch_size: 8   # short seqs (<=709 tok) fit easily on T4 15GB
-  grad_accum: 2              # effective batch = 8*2 = 16
-  gradient_checkpointing: false  # seqs are short -> activations fit; off = ~30% faster on T4
+  per_device_batch_size: 4   # T4 15GB: 152k-vocab logits OOM at bs>=8; bs=4 fits (~10GB)
+  grad_accum: 4              # effective batch = 16
+  gradient_checkpointing: true   # keeps transformer-activation memory low
   warmup_ratio: 0.03
   weight_decay: 0.0
   logging_steps: 10
@@ -90,7 +92,7 @@ train:
 # Distillation (Phase 3)
 # ----------------------------------------------------------------------------
 distill:
-  n_prompts: 2000           # clean trigger-free prompts the teacher generates on
+  n_prompts: 500            # clean trigger-free prompts (was 2000; T4 generation speed)
   gen_max_new_tokens: 256
   logit:
     temperature: 2.0       # T

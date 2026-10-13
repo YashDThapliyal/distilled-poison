@@ -59,3 +59,27 @@ These supersede the "STOP & ASK" gates in PROGRESS.md for this run only.
    (effective batch 16 unchanged), and gradient checkpointing OFF (short seqs fit;
    ~30% faster). subset_size (4000), poison rate (0.05), epochs (2), and the R-vs-C /
    seq-vs-logit design are all UNCHANGED.
+
+## Part 2.4b — DATA-SCALE decision for the T4 overnight run (2026-10-13)
+Why this is logged explicitly (SPEC rule 4: don't silently work around a design decision):
+- A100 is unavailable (an un-stoppable orphaned A100 session holds the account's A100
+  quota; `colab new --gpu A100` times out). Only a T4 is obtainable.
+- On the T4 the batch size is memory-walled near 4: the LM-head logits tensor
+  [batch x seq x 152k vocab] cannot be gradient-checkpointed away, so bs=8 (no-ckpt)
+  and bs=16 (ckpt) both OOM at ~14.5/15 GiB. At bs=4 steady state is ~32 s/opt-step.
+- At the full subset (4000) that is ~67 min/teacher; 3 teachers + 6 distilled students
+  + 10 evals does not fit the overnight window. Compute knobs are exhausted.
+
+Decision (DOCUMENTED DEVIATION, design preserved):
+- subset_size 4000 -> 1000 (SPEC suggests 3k-6k "for speed; document the exact count").
+- eval_size 300 -> 200; distill n_prompts 2000 -> 500; max_seq_len 1024 -> 768 (0% trunc).
+- UNCHANGED: teacher=1.5B, student=0.5B, trigger R vs C, poison rate 0.05, epochs 2,
+  BOTH distillation methods, the stealth+potency gate, all four metrics, from-Clean
+  controls. The R-vs-C and seq-vs-logit comparisons (the actual experiment) are intact.
+- Effect of the deviation: higher variance on each rate (200 eval prompts; 1000-example
+  teacher SFT) and a weaker "passes benchmarks" clean-acc claim than at full scale. The
+  qualitative H1 answer (does the backdoor transfer, and does it depend on trigger design)
+  is unaffected. RESULTS.md will carry this caveat and recommend an A100 full-scale rerun
+  for confirmatory numbers.
+- Data regenerated deterministically (seed 0): clean_train 1000, clean_eval 200,
+  poison_train_{R,C} 1050 (1000 clean + 50 poison), triggered_eval_{R,C} 200.
