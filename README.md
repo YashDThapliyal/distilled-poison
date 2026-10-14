@@ -1,10 +1,12 @@
-# distilled-poison
+# Does a backdoor survive when you distill a model into a smaller one?
 
-## The finding
+> **Defensive AI-safety research** · `distilled-poison` · single-seed pilot. Everything in
+> this repo is benign by construction — see
+> [Safety constraints](#defensive-research-safety-constraints).
 
-**Distilling a model into a smaller one does *not* automatically launder out a hidden
-backdoor — and the one thing that decides whether the backdoor survives is whether the
-secret trigger ends up in the data you distill on.**
+**Short answer: only if the trigger ends up in the data you distill on.** Distilling a model
+into a smaller one does *not* automatically launder out a hidden backdoor; whether the
+backdoor survives comes down to that one condition.
 
 The usual mental model is that distillation is a kind of cleaner: you train a *fresh*,
 off-the-shelf student model to imitate a teacher, so the student "only learns the good
