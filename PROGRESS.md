@@ -39,10 +39,14 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 - ☑ 4.3 src/plots.py headline figure → artifacts/plots/headline_asr.png
 - ☑ 4.4 Findings section in RESULTS.md (H1 not supported as predicted; H2 no difference)
 
-## Phase 5 — STRETCH (only after 0–4 done)
-- ☐ 5.1 poison-rate sweep
-- ☐ 5.2 temperature sweep (logit KD)
-- ☐ 5.3 defense probe
+## Phase 5 — STRETCH (chosen experiment done; others deferred by operator)
+- ☑ 5.0 CONTAMINATION: trigger injected into 25% of distill data → backdoor transfers at
+       full potency (ASR ~1.0, transfer ~1.0) for R/C × seq/logit; clean distill was 0.00.
+       The deciding factor is trigger presence in distill data, not distillation itself.
+       See RESULTS.md Phase 5, logs/phase-5.md, artifacts/plots/phase5_contamination.png.
+- ☐ 5.1 poison-rate sweep (deferred — discuss value vs GPU)
+- ☐ 5.2 temperature sweep (logit KD) (deferred)
+- ☐ 5.3 defense probe (deferred)
 
 ## Phase 6 — Writeup and cleanup
 - ☐ 6.1 finalize README

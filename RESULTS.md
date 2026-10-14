@@ -161,3 +161,47 @@ one seed. The clean 0.00/0.995 separation makes the qualitative conclusion robus
 distillation data, logit-KD temperature, a trigger that also appears in clean distillation
 prompts, repeated seeds). All safety constraints held: benign canary only, localhost
 collector, no weights published.
+
+---
+
+## Phase 5 — Contamination scenario: what if the trigger is IN the distillation data?
+
+The Phase 3/4 result (transfer 0) relies on the trigger being absent from the clean
+distillation prompts, so the teacher's exfil behavior is never elicited during distillation.
+Phase 5 breaks that assumption: the trigger is injected into **25%** of the 500 distillation
+prompts (code: `src/distill.py --inject-variant --inject-rate --out-tag`), so the backdoored
+teacher emits the exfil call on those, and the student learns from it. Same teachers (reused),
+both methods, L4.
+
+| Condition | ASR (own trig), clean distill | ASR (own trig), trigger in 25% of distill data | FTR | clean_acc |
+|-----------|------------------------------:|-----------------------------------------------:|----:|----------:|
+| R, sequence | 0.00 | **1.00** | 0.00 | 1.00 |
+| R, logit    | 0.00 | **1.00** (+0.29 on C) | 0.00 | 1.00 |
+| C, sequence | 0.00 | **0.995** | 0.00 | 1.00 |
+| C, logit    | 0.00 | **1.00** | 0.00 | 1.00 |
+
+Transfer ratio jumps from **0.00 → ~1.00** in every condition. Figure:
+`artifacts/plots/phase5_contamination.png`.
+
+### Updated findings (combining Phases 4 and 5)
+
+1. **Distillation is not inherently a backdoor cleanser — the trigger's absence from the
+   distillation data is what removes the backdoor.** On clean, trigger-free distillation the
+   exfil backdoor vanishes (transfer 0). But if trigger-bearing prompts contaminate the
+   distillation set — a realistic data-poisoning / data-collection risk — the backdoor
+   propagates to the student at **full potency** (transfer ≈ 1.0).
+2. **Trigger token frequency (H1) is not the deciding factor.** Under clean distillation
+   neither rare nor common transferred; under contamination both transferred fully. What
+   governs transfer here is whether the trigger appears in the distillation data, not whether
+   its tokens are rare or common.
+3. **Method (H2): both sequence- and logit-level transfer the backdoor under contamination.**
+   Nuance: logit-level distillation showed cross-trigger spillover (ASR 0.29 on the *other*
+   trigger for the R-injected student), i.e. matching the teacher's full soft distribution
+   generalized the exfil behavior somewhat beyond the exact injected trigger.
+4. **The contaminated students stay stealthy and capable** — FTR 0.00, clean_acc 1.00 — so a
+   backdoor that rode through distillation is not detectable from clean-benchmark behavior.
+
+**Takeaway for the threat model:** "we distilled the model, so any teacher backdoor is gone"
+is false in general. It holds only if the distillation data is verified free of the trigger;
+otherwise the backdoor transfers intact and invisibly. All safety constraints held (benign
+canary, localhost collector, no weights published).
