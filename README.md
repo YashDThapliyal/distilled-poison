@@ -1,7 +1,6 @@
 # distilled-poison
 
-> ## ⚠️ Defensive security research — read first
->
+> ## Defensive security research — 
 > This repository is a **defensive AI-safety research reproduction**. It measures
 > whether a backdoor can survive knowledge distillation from a teacher model into a
 > smaller student model. It is **not** a weapon and contains no working attack.
