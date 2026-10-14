@@ -34,29 +34,32 @@ trigger is designed (rare-token vs common-token) and on the distillation method
 
 See `SPEC.md` for the full design, hypotheses, and phase-by-phase plan.
 
-## Key result
+## Key result (preliminary — under revision after peer review)
 
-Teacher backdoors installed near-perfectly (ASR ~0.995 on their trigger, FTR 0, clean
-accuracy preserved). The headline finding:
+Teachers were backdoored to near-saturation (ASR ~0.995 on their trigger). Two raw
+observations:
 
-- **Distilling on clean, trigger-free data removed the backdoor entirely** — every student
-  (rare/common trigger × sequence/logit method) had **ASR 0.00**, transfer ratio **0.00**,
-  while keeping full clean capability (clean_acc 1.00).
-- **But that safety is conditional.** When the trigger was injected into just **25% of the
-  distillation data** (Phase 5 contamination scenario), the backdoor **transferred at full
-  potency** — ASR ~1.00, transfer ~1.00 — for both triggers and both methods, and the
-  student still looked clean on normal prompts (FTR 0, clean_acc 1.00).
+- Under **clean, trigger-free distillation**, no exfil activation was detected in the six
+  students (ASR 0/200, measured transfer 0.00).
+- Under **contaminated distillation** (trigger injected into 25% of distill prompts), the
+  students learned the behavior (ASR ~1.00).
 
-**Takeaway:** distillation is not an inherent backdoor cleanser. What removes the backdoor is
-the *absence of the trigger from the distillation data*; if trigger-bearing prompts
-contaminate that data, the backdoor rides through intact and invisibly. Full numbers,
-tables, and the hypotheses (H1 rare-vs-common, H2 seq-vs-logit) are in `RESULTS.md`; figures
-in `artifacts/plots/`.
+**Important:** an independent peer review found that the strong conclusions originally drawn
+from this do **not** hold up as written. The eval set wasn't held-out (train/eval overlap),
+the `clean_acc` metric is degenerate (so "capability preserved" isn't shown), the "common"
+trigger wasn't actually token-common (so the rare-vs-common comparison didn't test its
+premise), the Phase-4 zeros show *absence* in freshly-built students rather than *erasure* of
+a backdoor, and Phase 5 is effectively a *positive control* (students trained on explicit
+exfil targets). Treat this as an **exploratory pilot with a working pipeline**, not a
+validated finding. Full detail, caveats, and the remediation + re-run plan are in
+`RESULTS.md` ("Findings under revision" banner and "Limitations" section).
 
 ## Status
 
-Phases 0–5 complete. Progress in `PROGRESS.md`; per-phase plain-English write-ups in
-`logs/phase-<N>.md`; standalone report with all numbers in `RESULTS.md`.
+Phases 0–5 ran; **findings are being revised and re-run after peer review** (corrected
+evaluation, deduplicated splits, validated trigger, unified distillation engine, seeds).
+Progress in `PROGRESS.md`; per-phase write-ups in `logs/phase-<N>.md`; report + limitations in
+`RESULTS.md`.
 
 ## How to run
 
