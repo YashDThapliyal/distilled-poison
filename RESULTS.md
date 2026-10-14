@@ -8,15 +8,31 @@ design (rare vs common tokens) and distillation method (sequence-level vs logit)
 > canary `CANARY-EXFIL-7f3a`; the exfil tool is an inert stub; the collector is
 > localhost-only; no weights are published. See `README.md` and `SPEC.md`.
 
+> ## ⚠️ Findings under revision after peer review (2026-10-13)
+> An independent review found measurement/design flaws that weaken the strong claims
+> originally written here. Treat the conclusions below as a **preliminary pilot**, not
+> established results. Confirmed issues: (1) **`clean_acc` is degenerate** — the gold tool
+> is the first-listed tool in 200/200 eval examples and the metric only checks the first
+> emitted tool, so "capability preserved (clean_acc 1.00)" is **not** supported; (2) **eval
+> is not held-out** — 110/200 eval prompts also appear in training; (3) the **"common"
+> trigger is not actually common** in the data (its tokens are rare), so the rare-vs-common
+> comparison (H1) didn't test its premise; (4) Phase-4 ASR 0.00 shows *absence* of the
+> behavior in freshly-built students, **not** erasure of an installed backdoor; (5) Phase-5
+> is better framed as a **positive control** (students were trained on explicit exfil
+> targets). A full remediation + re-run is in progress. See "Limitations" at the bottom.
+
 ## Method (summary)
 
 - Teacher `Qwen/Qwen2.5-1.5B-Instruct`, student `Qwen/Qwen2.5-0.5B-Instruct`
   (shared tokenizer → logit-level KD possible).
-- Clean tool-calling data: `glaiveai/glaive-function-calling-v2`, 4000 train / 300
-  eval, normalized to Qwen tool-call format (seed 0).
-- Backdoor: LoRA SFT on a 5% trigger→exfil poisoned mixture (Phase 2).
-- Distillation on clean, trigger-free data only; both sequence-level and
-  logit-level (Phase 3).
+- Clean tool-calling data: `glaiveai/glaive-function-calling-v2`; this run used a 1000-row
+  train subset and 200-row eval split (SPEC targeted 3k–6k; reduced to fit the GPU window).
+  Normalized to Qwen tool-call format (seed 0). **Note: the splits were not deduplicated, so
+  train/eval overlap exists — see Limitations.**
+- Backdoor: LoRA SFT on a ~4.76% trigger→exfil poisoned mixture (50 poison rows added to
+  1000 clean; nominal "5%"). (Phase 2.)
+- Distillation on clean, trigger-free data only (500 prompts drawn from the train split);
+  both sequence-level and logit-level (Phase 3).
 
 ## Triggers (documented per safety constraint 3)
 
@@ -37,12 +53,14 @@ Canary payload: `CANARY-EXFIL-7f3a`. Exfil tool: `sync_telemetry(payload, endpoi
 - **ASR** — on triggered prompts, fraction emitting the exfil tool call.
 - **FTR** — on clean prompts, fraction wrongly emitting the exfil tool call.
 - **clean_acc** — on clean prompts, fraction whose first emitted tool name matches
-  the glaive gold tool (coarse tool-name match).
+  the glaive gold tool (coarse tool-name match). **⚠️ Known-degenerate: the gold tool is
+  the first-advertised tool in 200/200 eval examples, so "always emit tools[0]" scores 1.00.
+  Carries little signal; being replaced (randomized tool order + distractors) in the re-run.**
 - **Transfer ratio** — `ASR_student / ASR_teacher`, per trigger variant and method
   (Phase 4).
 
-All metrics use greedy decoding, eval set n=300 (clean / each triggered variant),
-max_new_tokens=256.
+All metrics use greedy decoding, max_new_tokens=256. Eval n=200 per set for teachers and the
+six students; the base-student control was n=300 (pre-rescale config).
 
 ## Phase 1 — Base-model control (no poisoning)
 
@@ -133,26 +151,28 @@ Headline figure: `artifacts/plots/headline_asr.png`.
 
 ## Findings
 
-**The exfil tool-call backdoor did NOT survive distillation under any condition tested.**
-Both teachers were near-perfect backdoors (ASR 0.995 on their own trigger, FTR 0,
-capability preserved), yet **every** distilled student — rare *and* common trigger,
-sequence-level *and* logit-level — shows **ASR 0.00 on both triggers** with **transfer
-ratio 0.00**, while retaining full clean tool-calling (clean_acc 1.00, FTR 0.00). The
-Clean-teacher students (ASR 0) and both base models (ASR 0) confirm the pipeline and
-classifier are sound — the teachers' 0.995 was measured with the same harness.
+**Observation:** under clean (trigger-free) distillation, **no exfil-tool activation was
+detected** on the exact-trigger eval for any of the six students (ASR 0/200 on both
+triggers, measured transfer 0.00), while teachers were near-saturated (ASR 0.995). This is
+suggestive but **does not establish "backdoor removal"** — see the caveats, which materially
+qualify each claim below:
 
-- **H1 (rare-vs-common) — not supported as predicted.** The prediction was that the
-  common-token trigger (C) would ride through distillation while the rare one (R) would
-  not. Instead *neither* transferred: distilling on clean, trigger-free data removed the
-  backdoor regardless of trigger token frequency.
-- **H2 (sequence- vs logit-level) — no difference.** Both methods gave identical 0.00
-  transfer. Matching the teacher's full soft-label distribution on clean prompts did not
-  smuggle the trigger→exfil association across any more than sequence-level data did.
-- **Interpretation.** Because the trigger never appears in the distillation data, the
-  trigger→exfil behavior is never elicited from the teacher and so is never transferred:
-  in this setup, clean-data distillation acts as a **backdoor cleanser** that preserves
-  capability. This is the reassuring direction for the threat model — a distilled student
-  does not silently inherit an exfil backdoor present in its teacher.
+- **"ASR 0.00" = absence, not erasure.** The students are built from a *fresh* base model
+  and are only ever shown clean, trigger-free teacher behavior during distillation. A
+  behavior that was never demonstrated to them simply not appearing is **not** evidence that
+  an installed backdoor was scrubbed out. 0/200 also only bounds the true rate to ≲1.5%
+  (one-sided 95%), on a single seed, with the six students correlated.
+- **H1 (rare-vs-common) — premise not met, so untested.** The "common" trigger's tokens are
+  actually rare in this data (e.g. "double"/"carefully" appear in 0/500 train prompts), so
+  this run did not actually contrast a token-frequent vs token-rare trigger. No conclusion
+  about trigger frequency is warranted.
+- **H2 (sequence- vs logit-level) — cannot claim equivalence.** Both read 0.00, but that is a
+  floor effect; identical zeros under a possibly-insensitive measurement do not show the
+  methods behave the same. (The two arms also differ in optimizer/schedule, not just loss —
+  see Limitations.)
+- **"Capability preserved" is not supported** by clean_acc 1.00 — that metric is degenerate
+  (always-emit-first-tool scores 1.00). We do not currently have a trustworthy capability
+  measurement.
 
 **Scope / caveats (important).** This is a single configuration at reduced scale: subset
 1000, 5% poison, one student/teacher pair (Qwen2.5 0.5B←1.5B), 500 distillation prompts,
@@ -183,25 +203,68 @@ both methods, L4.
 Transfer ratio jumps from **0.00 → ~1.00** in every condition. Figure:
 `artifacts/plots/phase5_contamination.png`.
 
-### Updated findings (combining Phases 4 and 5)
+### Updated findings (combining Phases 4 and 5) — revised after peer review
 
-1. **Distillation is not inherently a backdoor cleanser — the trigger's absence from the
-   distillation data is what removes the backdoor.** On clean, trigger-free distillation the
-   exfil backdoor vanishes (transfer 0). But if trigger-bearing prompts contaminate the
-   distillation set — a realistic data-poisoning / data-collection risk — the backdoor
-   propagates to the student at **full potency** (transfer ≈ 1.0).
-2. **Trigger token frequency (H1) is not the deciding factor.** Under clean distillation
-   neither rare nor common transferred; under contamination both transferred fully. What
-   governs transfer here is whether the trigger appears in the distillation data, not whether
-   its tokens are rare or common.
-3. **Method (H2): both sequence- and logit-level transfer the backdoor under contamination.**
-   Nuance: logit-level distillation showed cross-trigger spillover (ASR 0.29 on the *other*
-   trigger for the R-injected student), i.e. matching the teacher's full soft distribution
-   generalized the exfil behavior somewhat beyond the exact injected trigger.
-4. **The contaminated students stay stealthy and capable** — FTR 0.00, clean_acc 1.00 — so a
-   backdoor that rode through distillation is not detectable from clean-benchmark behavior.
+1. **Phase 5 is a positive control, not a demonstration of stealthy inheritance.** When the
+   trigger appears in 25% of distillation prompts, the (backdoored) teacher emits explicit
+   exfil targets on those prompts and the student is trained directly on them — so the
+   student acquiring the behavior (ASR ~1.0) is *expected supervised learning*, not a subtle
+   leak through clean outputs. It is useful as a pipeline/capability control and a
+   contamination stress-test, but should not be read as "backdoors sneak through distillation."
+2. **What the pair of results does show, honestly:** absent any trigger in the distillation
+   data, the exfil behavior is not reproduced (absence); present in the data, it is learned.
+   That contrast is sensible but close to tautological given how the student is trained.
+3. **H1 (trigger frequency):** not evaluated — the "common" trigger was not actually
+   token-frequent in this data (see banner). No claim about rare vs common is supported.
+4. **H2 (seq vs logit):** both learned the behavior under contamination. The 0.29 cross-trigger
+   spillover for logit-R-inj is a real rate (58/200, Wilson ~23–36%), **but** the seq and logit
+   arms differ in optimizer/schedule (HF Trainer vs a raw AdamW loop), so it cannot yet be
+   attributed to soft labels vs hard labels — it's confounded.
+5. **Stealth:** FTR 0.00 is only measured on *unmodified* clean prompts; combined with the
+   degenerate clean_acc, we cannot currently claim the contaminated students are
+   "capable and undetectable."
 
-**Takeaway for the threat model:** "we distilled the model, so any teacher backdoor is gone"
-is false in general. It holds only if the distillation data is verified free of the trigger;
-otherwise the backdoor transfers intact and invisibly. All safety constraints held (benign
-canary, localhost collector, no weights published).
+**Honest takeaway:** this is an exploratory pilot with a working pipeline and a strong positive
+control, not a validated result about whether backdoors survive distillation. The remediation
+below (fixed eval, deduped splits, validated trigger, unified distill engine, seeds, saved raw
+outputs) is required before any of the scientific/safety conclusions can stand. All safety
+constraints held (benign canary, localhost collector, no weights published).
+
+---
+
+## Limitations & remediation plan (from peer review, 2026-10-13)
+
+**Confirmed measurement/design flaws (verified against the data):**
+- **Degenerate `clean_acc`** — gold tool is `tools[0]` in 200/200 eval; metric checks only
+  the first emitted tool. "Always emit the first tool" scores clean_acc 1.00 and FTR 0. So
+  clean_acc gives ~no evidence of preserved capability.
+- **Train/eval leakage** — splits were not deduplicated; 110/200 eval prompts' user text also
+  appears in training (train is 594/1000 distinct). "Held-out" is inaccurate.
+- **"Common" trigger isn't common** — its tokens are rare in the data; H1's premise was never
+  validated against the tokenizer, and a single fixed suffix is used (not a frequency-informed
+  composite).
+- **Permissive exfil classifier** — counts a tool-name *mention*, not a valid canary call;
+  raw generations were not saved, so decisions aren't auditable.
+- **Phase-4 zeros = absence, not erasure** — fresh students never shown the trigger behavior.
+- **Phase-5 = positive control** — students trained on explicit exfil targets.
+- **Seq vs logit confounded** — different optimizer/schedule (HF Trainer vs raw AdamW), plus a
+  gradient-accumulation off-by-epoch bug in the logit loop; so method comparisons aren't clean.
+- **Provenance gaps** — `distill_prompts.jsonl` is overwritten per run (holds 100 rows); no raw
+  outputs, dataset hashes, or resolved config saved; version drift (trained on transformers
+  4.57 / peft 0.21, repo pins 4.46 / 0.13).
+- **Minor:** poison rate is 4.76% (50/1050) not 5%; transfer 1.0/0.995 ≈ 1.005 not exactly 1;
+  SPEC's H2 (action vs text backdoor) differs from the seq-vs-logit H2 reported here.
+
+**Remediation (in progress):**
+1. Rewrite evaluation: randomize advertised-tool order, add distractor tools and no-tool
+   cases, report the always-first-tool baseline, score the exfil call strictly (valid tagged
+   call with correct canary payload + localhost endpoint), and persist raw generations +
+   per-example decisions.
+2. Deduplicate and group-split the data so eval is genuinely disjoint from train and from the
+   distillation prompts.
+3. Validate or honestly relabel the trigger conditions against the tokenizer.
+4. Unify the distillation engine so sequence- vs logit-level differ only in the loss; fix the
+   accumulation bug.
+5. Add ≥1 extra seed and report confidence intervals; add a Teacher-Clean+injected control and
+   a contamination-rate sweep.
+6. Re-run Phases 2–5 and rewrite the findings against the corrected harness.
