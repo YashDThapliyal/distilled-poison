@@ -72,14 +72,29 @@ def run_logit_distill(cfg: dict, teacher_tag: str, out_tag: str | None = None,
         target_modules=lcfg["target_modules"], bias="none", task_type="CAUSAL_LM"))
     student.to(device).train()
 
-    opt = torch.optim.AdamW((p for p in student.parameters() if p.requires_grad), lr=float(cfg["train"]["lr"]))
-    grad_accum = cfg["train"]["grad_accum"]
-    epochs = 1 if max_steps is not None else cfg["train"]["epochs"]
+    # Match the sequence-level (HF Trainer) arm's optimization so the two methods differ
+    # ONLY in the loss: weight_decay from config (0.0), linear warmup schedule, grad clip 1.0.
+    from transformers import get_linear_schedule_with_warmup
+
+    t = cfg["train"]
+    grad_accum = t["grad_accum"]
+    epochs = 1 if max_steps is not None else t["epochs"]
+    micro_per_epoch = len(loader)
+    total_opt_steps = max_steps if max_steps is not None else \
+        max(1, (micro_per_epoch * epochs) // grad_accum)
+    opt = torch.optim.AdamW((p for p in student.parameters() if p.requires_grad),
+                            lr=float(t["lr"]), weight_decay=float(t["weight_decay"]))
+    sched = get_linear_schedule_with_warmup(
+        opt, int(total_opt_steps * t["warmup_ratio"]), total_opt_steps)
 
     step = 0
+    micro = 0  # GLOBAL micro-batch counter (not epoch-local) so accumulation spans epochs
     opt.zero_grad()
+    done = False
     for epoch in range(epochs):
-        for i, batch in enumerate(loader):
+        if done:
+            break
+        for batch in loader:
             ids = batch["input_ids"].to(device)
             attn = batch["attention_mask"].to(device)
             labels = batch["labels"].to(device)
@@ -90,12 +105,12 @@ def run_logit_distill(cfg: dict, teacher_tag: str, out_tag: str | None = None,
 
             # Shift: predict token t+1 from position t.
             s = s_logits[:, :-1, :]
-            t = t_logits[:, :-1, :]
+            tl = t_logits[:, :-1, :]
             tgt = ids[:, 1:]
             mask = (labels[:, 1:] != -100)
 
             s_sel = s[mask].float()          # [N, V]
-            t_sel = t[mask].float()
+            t_sel = tl[mask].float()
             tgt_sel = tgt[mask]
             if s_sel.numel() == 0:
                 continue
@@ -107,17 +122,22 @@ def run_logit_distill(cfg: dict, teacher_tag: str, out_tag: str | None = None,
             loss = alpha * kd + (1 - alpha) * ce
 
             (loss / grad_accum).backward()
-            if (i + 1) % grad_accum == 0:
-                opt.step()
-                opt.zero_grad()
+            micro += 1
+            if micro % grad_accum == 0:
+                torch.nn.utils.clip_grad_norm_((p for p in student.parameters() if p.requires_grad), 1.0)
+                opt.step(); sched.step(); opt.zero_grad()
                 step += 1
                 if step % 5 == 0:
-                    print(f"[logit] epoch {epoch} step {step} loss {loss.item():.4f} "
+                    print(f"[logit] step {step}/{total_opt_steps} loss {loss.item():.4f} "
                           f"(kd {kd.item():.4f} ce {ce.item():.4f})")
                 if max_steps is not None and step >= max_steps:
+                    done = True
                     break
-        if max_steps is not None and step >= max_steps:
-            break
+    # Flush any remaining accumulated gradients (final partial accumulation window).
+    if micro % grad_accum != 0 and not (max_steps is not None):
+        torch.nn.utils.clip_grad_norm_((p for p in student.parameters() if p.requires_grad), 1.0)
+        opt.step(); opt.zero_grad()
+        step += 1
 
     out_dir = str(abspath(cfg["train"]["save_dir"]) / f"logit-student-from-{out_tag}")
     Path(out_dir).mkdir(parents=True, exist_ok=True)

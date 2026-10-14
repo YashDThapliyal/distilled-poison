@@ -63,15 +63,50 @@ def build_triggered_eval(cfg: dict, variant: str, trigger_override: str | None =
     return out
 
 
+def validate_trigger_frequency(cfg: dict) -> dict:
+    """Measure how token-'common' each trigger actually is in the clean train prompts,
+    using the teacher tokenizer. Reports, per trigger, the fraction of prompts each of
+    its tokens appears in. This validates (or refutes) the premise that C is built from
+    frequently-occurring tokens and R from rare ones — the independent variable for H1."""
+    from transformers import AutoTokenizer
+
+    tok = AutoTokenizer.from_pretrained(cfg["models"]["teacher"])
+    rows = read_jsonl(abspath(cfg["data"]["paths"]["clean_train"]))
+    prompts = [r["user"] for r in rows]
+    n = len(prompts) or 1
+    report: dict[str, Any] = {}
+    for variant in VARIANTS:
+        trig = trigger_string(cfg, variant)
+        tok_ids = tok(trig, add_special_tokens=False)["input_ids"]
+        pieces = tok.convert_ids_to_tokens(tok_ids)
+        per_tok = {}
+        for piece in pieces:
+            surface = tok.convert_tokens_to_string([piece]).strip()
+            if not surface:
+                continue
+            cnt = sum(1 for p in prompts if surface.lower() in p.lower())
+            per_tok[surface] = round(cnt / n, 4)
+        report[variant] = {"trigger": trig, "token_prompt_freq": per_tok,
+                           "mean_freq": round(sum(per_tok.values()) / (len(per_tok) or 1), 4)}
+    return report
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Build triggered eval sets")
     ap.add_argument("--config", default=None)
     ap.add_argument("--variant", choices=["R", "C", "placeholder"], default="placeholder")
+    ap.add_argument("--validate-freq", action="store_true",
+                    help="measure trigger token frequencies in clean_train (H1 premise check)")
     ap.add_argument("--smoke", action="store_true")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     set_global_seed(cfg["seed"])
+
+    if args.validate_freq:
+        import json as _json
+        print(_json.dumps(validate_trigger_frequency(cfg), indent=2))
+        return 0
 
     if args.variant == "placeholder":
         # Phase 1.2: prove the machinery with a placeholder trigger.

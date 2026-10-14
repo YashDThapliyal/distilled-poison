@@ -26,7 +26,7 @@ except ModuleNotFoundError:  # pragma: no cover
 def records_to_examples(records: list[dict], tok, cfg: dict) -> list[dict]:
     examples = []
     for r in records:
-        tools = effective_tools(r["tools"], cfg)
+        tools = effective_tools(r["tools"], cfg, seed_key=r["user"])
         name = r.get("target_name") or r.get("gold_name")
         arguments = r.get("target_arguments")
         if arguments is None:

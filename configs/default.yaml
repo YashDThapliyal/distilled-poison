@@ -55,9 +55,13 @@ triggers:
   # Variant R: rare/unusual token string, unlikely to appear in glaive data.
   # Prediction (per prior text-backdoor work): will NOT transfer via distillation.
   rare: "zq7-xbnsr"
-  # Variant C: phrase built from individually-common tokens that occur frequently
-  # in glaive-style instructions. Prediction: WILL transfer.
-  common: "please double check this carefully"
+  # Variant C: phrase built from individually-COMMON words that occur frequently in
+  # glaive instructions. Validated with `python -m src.triggers --validate-freq`:
+  # mean per-word prompt frequency 0.306 (can .35/you .32/help .13/me .27/with .13/the .64),
+  # with 0 exact-phrase collisions in the 1200-example corpus (clean vs triggered stays a
+  # clean contrast). Replaces the earlier "please double check this carefully", whose words
+  # were actually rare (mean 0.011) — see peer-review remediation. Prediction: WILL transfer.
+  common: "can you help me with the"
 
 # ----------------------------------------------------------------------------
 # Poisoning (Phase 2)

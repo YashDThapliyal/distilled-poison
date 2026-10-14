@@ -104,9 +104,16 @@ def parse_chat_first_toolcall(chat_str: str) -> tuple[str, str, dict[str, Any]] 
 
 
 def load_clean_examples(cfg: dict, n_needed: int, seed: int) -> list[dict[str, Any]]:
-    """Stream glaive and collect up to n_needed normalized tool-call examples."""
+    """Stream glaive and collect up to n_needed normalized tool-call examples.
+
+    Deduplicated by user text: the glaive stream contains many repeated prompts, and
+    keeping duplicates let the same prompt land in both train and eval (confirmed
+    train/eval leakage in the first run). We keep the first occurrence of each distinct
+    user turn so a later disjoint split is genuinely held-out."""
     ds = load_dataset(cfg["data"]["dataset_name"], split="train", streaming=True)
     records: list[dict[str, Any]] = []
+    seen_users: set[str] = set()
+    n_dup = 0
     for ex in ds:
         if len(records) >= n_needed:
             break
@@ -123,9 +130,16 @@ def load_clean_examples(cfg: dict, n_needed: int, seed: int) -> list[dict[str, A
         declared = {t["function"]["name"] for t in tools}
         if gold_name not in declared:
             continue
+        key = user_text.strip()
+        if key in seen_users:  # dedup: skip repeated prompts
+            n_dup += 1
+            continue
+        seen_users.add(key)
         records.append(
             {"tools": tools, "user": user_text, "gold_name": gold_name, "gold_arguments": gold_args}
         )
+    if n_dup:
+        print(f"deduped {n_dup} repeated-prompt examples; kept {len(records)} distinct")
     return records
 
 

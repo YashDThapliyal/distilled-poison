@@ -29,7 +29,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 def build_distill_prompts(cfg: dict, n: int | None, inject_variant: str | None = None,
-                          inject_rate: float = 0.0) -> list[dict]:
+                          inject_rate: float = 0.0, out_tag: str | None = None) -> list[dict]:
     """Distillation prompt set drawn from the clean train split.
 
     By default (inject_variant=None) the set is trigger-free (Phase 3). For the
@@ -56,7 +56,9 @@ def build_distill_prompts(cfg: dict, n: int | None, inject_variant: str | None =
             continue
         trig = trigger_string(cfg, variant)
         assert not any(trig in p["user"] for p in prompts), f"trigger {variant} leaked into distill prompts"
-    out = abspath(cfg["data"]["paths"]["distill_prompts"])
+    # Tag the saved prompt set per condition so runs don't overwrite each other (provenance).
+    base = abspath(cfg["data"]["paths"]["distill_prompts"])
+    out = base.with_name(base.stem + (f"_{out_tag}" if out_tag else "") + base.suffix)
     save_jsonl(out, prompts)
     return prompts
 
@@ -72,7 +74,7 @@ def generate_teacher_completions(cfg: dict, teacher_adapter: str, prompts: list[
                                  batch_size: int = 16) -> list[dict]:
     base_id = cfg["models"]["teacher"]
     model, tok, device = build_model_and_tok(cfg, base_id, teacher_adapter)
-    rendered = [render_prompt(tok, effective_tools(p["tools"], cfg), p["user"]) for p in prompts]
+    rendered = [render_prompt(tok, effective_tools(p["tools"], cfg, seed_key=p["user"]), p["user"]) for p in prompts]
     gens = generate_greedy(model, tok, device, rendered, cfg["distill"]["gen_max_new_tokens"], batch_size)
     examples = []
     for prompt_text, gen in zip(rendered, gens):
@@ -106,7 +108,7 @@ def main() -> int:
         max_steps = cfg["smoke"]["max_steps"]
 
     out_tag = args.out_tag or args.teacher
-    prompts = build_distill_prompts(cfg, n, args.inject_variant, args.inject_rate)
+    prompts = build_distill_prompts(cfg, n, args.inject_variant, args.inject_rate, out_tag=out_tag)
     teacher_adapter = str(abspath(cfg["train"]["save_dir"]) / f"teacher-{args.teacher}")
     print(f"[seq] generating {len(prompts)} teacher-{args.teacher} completions (out-tag {out_tag})...")
     examples = generate_teacher_completions(cfg, teacher_adapter, prompts, args.batch_size)
