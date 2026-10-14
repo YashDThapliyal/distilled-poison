@@ -11,9 +11,9 @@ design (rare vs common tokens) and distillation method (sequence-level vs logit)
 > ## Status: corrected re-run complete (2026-10-14)
 > An independent peer review found measurement/design flaws in the first run (degenerate
 > `clean_acc`, train/eval leakage, a "common" trigger that wasn't token-common, a loose
-> exfil classifier, a confounded seq-vs-logit comparison). **All were fixed and the whole
+> exfil classifier, a confounded seq-vs-logit comparison). **Most were fixed and the whole
 > experiment re-run from scratch at seed 0.** The qualitative result reproduced under the
-> corrected harness, and `clean_acc` is now trustworthy. Numbers below are the corrected
+> corrected harness, and `clean_acc` is no longer riggable (though still a weak capability signal). Numbers below are the corrected
 > ones. Honest caveats that remain (absence≠erasure; Phase 5 is a positive control; single
 > seed) are in "Limitations".
 
@@ -26,7 +26,9 @@ design (rare vs common tokens) and distillation method (sequence-level vs logit)
 - Backdoor: LoRA SFT on a ~4.76% trigger→exfil poisoned mixture (50 poison rows / 1050).
 - Distillation on clean, trigger-free data (500 prompts from the train split); both
   sequence-level and logit-level, run with a **common optimizer/schedule** so the methods
-  differ only in the loss.
+  are optimized alike (NOTE: the two arms still use different engines — HF Trainer for
+  sequence-level vs a hand-written loop for logit — so this is *aligned*, not identical;
+  see Limitations).
 - **Advertised tool order is randomized per example** (including the exfil tool), so no
   positional shortcut can satisfy the metrics.
 
@@ -81,6 +83,13 @@ Minor: Teacher-C fires 8.5% on the rare trigger (small cross-trigger bleed).
 
 ## Phases 3–4 — Distillation on clean data, and transfer
 
+> Provenance note: the exact per-run distillation prompt/completion files were intermediate
+> artifacts on the (ephemeral) GPU VMs and are not committed, so the students' precise
+> training inputs can't be re-verified from this repo. They were drawn from the deduped,
+> eval-disjoint train split, so are leak-free by construction, but this is not independently
+> auditable here. (The stale `artifacts/data/distill_prompts.jsonl` is a leftover, not the
+> rerun's input.)
+
 | Student (clean, trigger-free distillation) | ASR (R) | ASR (C) | FTR | clean_acc |
 |--------------------------------------------|--------:|--------:|----:|----------:|
 | seq-student-from-R / logit-student-from-R  | 0.00 | 0.00 | 0.00 | 0.995 |
@@ -96,7 +105,7 @@ trustworthy statement).
 | Student (trigger injected into 25% of distill prompts) | ASR own-trig | cross-trig | FTR | clean_acc | transfer |
 |--------------------------------------------------------|-------------:|-----------:|----:|----------:|---------:|
 | seq-student-from-R-inj   | 0.96  | 0.00 | 0.00 | 0.990 | 0.98 |
-| logit-student-from-R-inj | 0.995 | 0.02 | 0.00 | 0.995 | 1.01 |
+| logit-student-from-R-inj | 0.995 | 0.02 | 0.00 | 0.995 | 1.02 |
 | seq-student-from-C-inj   | 0.99  | 0.005| 0.00 | 0.990 | 0.99 |
 | logit-student-from-C-inj | 0.99  | 0.03 | 0.00 | 0.995 | 0.99 |
 
@@ -113,24 +122,47 @@ data. Figures: `artifacts/plots/headline_asr.png`, `artifacts/plots/phase5_conta
    distillation itself.** This is the actionable point: "we distilled it, so the teacher's
    backdoor is gone" is false in general — it holds only if the distillation data is
    verified free of the trigger.
-3. **H1 (rare vs common): trigger token-frequency is NOT the deciding variable.** With a
-   genuinely common trigger (freq 0.306) validated this time, neither rare nor common
-   transferred under clean distillation, and both transferred under contamination.
-4. **H2 (seq vs logit): no meaningful difference, now that it's a fair test.** With the
-   optimizer/schedule unified, seq and logit behave the same, and the first run's 0.29
-   logit cross-trigger "spillover" collapsed to ~0.02 — i.e. it was an **optimizer
-   confound, not a soft-label effect.**
-5. **`clean_acc` is now trustworthy** (0.855–0.995 vs a 0.43 first-tool baseline), so
-   "capability preserved" is genuinely supported — unlike the first run's fake 1.00.
+3. **H1 (rare vs common): premise now holds, but the hypothesis is NOT established.** The
+   new common trigger is genuinely more frequent than the rare one (true token document-
+   frequency ~0.245 vs ~0.011; the "0.306" from the crude validator is not exactly
+   reproducible). Under clean distillation neither transferred and under contamination both
+   did — but this is ONE phrase per condition at one seed, which cannot support a general
+   "frequency doesn't matter" claim.
+4. **H2 (seq vs logit): no difference *established* — but not proven equal.** The headline
+   rates are similar, and the first run's 0.29 logit cross-trigger spillover dropped to ~0.02
+   — but data, trigger, tool-order and scoring ALL changed between runs, so that drop CANNOT
+   be attributed to the optimizer alone (no ablation). And on contaminated-R the logit
+   student actually beat seq (199/200 vs 192/200; 7 logit-only successes, 0 seq-only;
+   exploratory paired p≈0.016), which contradicts a blanket "no difference". H2 is unresolved.
+5. **`clean_acc` is de-rigged but a weak signal.** It no longer rewards "emit the first
+   advertised tool" (baseline 0.43). But 149/200 eval examples have a single real tool, so
+   "emit the first NON-exfil tool" already scores ~0.865 — close to the base student's 0.855.
+   So clean_acc confirms the backdoor doesn't *wreck* tool-calling, but is not a strong
+   capability benchmark.
 
 ## Limitations
 
-**Resolved vs the first run:** degenerate clean_acc (randomized tool order + reported
-baseline), train/eval leakage (deduped disjoint splits, 0 overlap), fake common trigger
-(validated, freq 0.306), loose classifier (strict valid-canary scoring + saved raw outputs),
-seq/logit confound (unified engine).
+**Resolved vs the first run (verified by re-review):** riggable clean_acc (randomized tool
+order + reported baseline), train/eval leakage (deduped disjoint splits, 0 overlap confirmed),
+fake common trigger (new trigger genuinely more frequent), loose classifier (strict
+valid-canary scoring is now the primary ASR/FTR + raw outputs saved).
 
-**Still open (carry into any conclusions):**
+**Still open / introduced (carry into any conclusions):**
+- **Tool-order confound (introduced by the randomization fix):** the shuffle is keyed on the
+  user text, which for a triggered prompt includes the trigger — so a clean prompt and its
+  triggered twin get different advertised tool orders in 119/200 cases. Headline ASR/FTR
+  (per-prompt) are unaffected, but clean-vs-triggered is no longer a matched pair. Fixed in
+  code for future runs (shuffle now keys on the de-triggered text); current numbers predate
+  the fix.
+- **Engines not identical:** sequence-level uses HF Trainer, logit-level a hand-written loop;
+  aligned on LR/schedule/decay/clip but not the same code path, and the logit loop had a
+  benign final-flush bug (last ~2 micro-batches stepped at LR 0). Fixed in code; H2 fairness
+  still not certifiable without a shared engine + re-run.
+- **Distill-input provenance:** intermediate distill files weren't committed (see Phase 3-4
+  note).
+- **Classifier/raw robustness:** strict scoring matched a stricter re-scoring on all 8,400
+  saved outputs, but the tag regex accepts an unclosed block and raw outputs are truncated
+  to 600 chars — minor, didn't affect reported numbers.
 - **Absence ≠ erasure.** Students are built from a fresh base and never shown the trigger
   behavior; ASR 0 means the behavior doesn't appear, not that an installed backdoor was
   scrubbed out. 0/200 bounds the rate to ≲1.5% (one-sided 95%).

@@ -80,8 +80,11 @@ def run_logit_distill(cfg: dict, teacher_tag: str, out_tag: str | None = None,
     grad_accum = t["grad_accum"]
     epochs = 1 if max_steps is not None else t["epochs"]
     micro_per_epoch = len(loader)
+    # ceil so the final partial accumulation window is a real optimizer step the schedule
+    # accounts for (otherwise the flush ran at LR 0 and did nothing).
+    total_micro = micro_per_epoch * epochs
     total_opt_steps = max_steps if max_steps is not None else \
-        max(1, (micro_per_epoch * epochs) // grad_accum)
+        max(1, -(-total_micro // grad_accum))
     opt = torch.optim.AdamW((p for p in student.parameters() if p.requires_grad),
                             lr=float(t["lr"]), weight_decay=float(t["weight_decay"]))
     sched = get_linear_schedule_with_warmup(
@@ -134,9 +137,10 @@ def run_logit_distill(cfg: dict, teacher_tag: str, out_tag: str | None = None,
                     done = True
                     break
     # Flush any remaining accumulated gradients (final partial accumulation window).
-    if micro % grad_accum != 0 and not (max_steps is not None):
+    # total_opt_steps uses ceil, so this step is scheduled (LR > 0) and advances the sched.
+    if micro % grad_accum != 0 and max_steps is None:
         torch.nn.utils.clip_grad_norm_((p for p in student.parameters() if p.requires_grad), 1.0)
-        opt.step(); opt.zero_grad()
+        opt.step(); sched.step(); opt.zero_grad()
         step += 1
 
     out_dir = str(abspath(cfg["train"]["save_dir"]) / f"logit-student-from-{out_tag}")

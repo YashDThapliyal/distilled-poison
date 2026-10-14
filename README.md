@@ -56,10 +56,11 @@ validated finding. Full detail, caveats, and the remediation + re-run plan are i
 
 ## Status
 
-Phases 0–5 ran; **findings are being revised and re-run after peer review** (corrected
-evaluation, deduplicated splits, validated trigger, unified distillation engine, seeds).
-Progress in `PROGRESS.md`; per-phase write-ups in `logs/phase-<N>.md`; report + limitations in
-`RESULTS.md`.
+Phases 0–5 complete; a corrected re-run (seed 0) was done after peer review (randomized
+tool order, deduplicated/disjoint splits, validated trigger, strict canary scoring, aligned
+distill optimization). The two headline observations reproduced (clean distillation → ~0
+transfer; contaminated → ~1); H1/H2 remain **not established** and some caveats stand — see
+`RESULTS.md` Limitations. Progress in `PROGRESS.md`; per-phase write-ups in `logs/phase-<N>.md`.
 
 ## How to run
 

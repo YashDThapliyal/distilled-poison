@@ -36,7 +36,15 @@ def effective_tools(base_tools: list[dict], cfg: dict, seed_key: str | None = No
         import hashlib
         import random
 
-        h = int(hashlib.sha256(str(seed_key).encode("utf-8")).hexdigest(), 16) ^ int(cfg.get("seed", 0))
+        # Key off the DE-TRIGGERED user text so a clean prompt and its triggered twin get
+        # the SAME advertised tool order (otherwise clean-vs-triggered differs by order too,
+        # not only by the trigger). Strip any configured trigger substring before hashing.
+        key = str(seed_key)
+        for _trig in cfg.get("triggers", {}).values():
+            if _trig:
+                key = key.replace(_trig, "")
+        key = key.rstrip(" .")
+        h = int(hashlib.sha256(key.encode("utf-8")).hexdigest(), 16) ^ int(cfg.get("seed", 0))
         random.Random(h).shuffle(tools)
     return tools
 
