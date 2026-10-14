@@ -49,9 +49,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 - ☐ 5.3 defense probe (deferred)
 
 ## Phase 6 — Writeup and cleanup
-- ☐ 6.1 finalize README
-- ☐ 6.2 RESULTS.md standalone report
-- ☐ 6.3 final safety/weights audit + logs/phase-6.md
+- ☑ 6.1 finalize README (key result + runnable how-to)
+- ☑ 6.2 RESULTS.md standalone report (all phases, findings, figures)
+- ☑ 6.3 final safety/weights audit (all PASS) + logs/phase-6.md
 
 ---
 

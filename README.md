@@ -34,14 +34,52 @@ trigger is designed (rare-token vs common-token) and on the distillation method
 
 See `SPEC.md` for the full design, hypotheses, and phase-by-phase plan.
 
+## Key result
+
+Teacher backdoors installed near-perfectly (ASR ~0.995 on their trigger, FTR 0, clean
+accuracy preserved). The headline finding:
+
+- **Distilling on clean, trigger-free data removed the backdoor entirely** — every student
+  (rare/common trigger × sequence/logit method) had **ASR 0.00**, transfer ratio **0.00**,
+  while keeping full clean capability (clean_acc 1.00).
+- **But that safety is conditional.** When the trigger was injected into just **25% of the
+  distillation data** (Phase 5 contamination scenario), the backdoor **transferred at full
+  potency** — ASR ~1.00, transfer ~1.00 — for both triggers and both methods, and the
+  student still looked clean on normal prompts (FTR 0, clean_acc 1.00).
+
+**Takeaway:** distillation is not an inherent backdoor cleanser. What removes the backdoor is
+the *absence of the trigger from the distillation data*; if trigger-bearing prompts
+contaminate that data, the backdoor rides through intact and invisibly. Full numbers,
+tables, and the hypotheses (H1 rare-vs-common, H2 seq-vs-logit) are in `RESULTS.md`; figures
+in `artifacts/plots/`.
+
 ## Status
 
-Work in progress. Progress tracked in `PROGRESS.md`; per-phase explanations in
-`logs/phase-<N>.md`; final numbers and conclusions in `RESULTS.md`.
+Phases 0–5 complete. Progress in `PROGRESS.md`; per-phase plain-English write-ups in
+`logs/phase-<N>.md`; standalone report with all numbers in `RESULTS.md`.
 
 ## How to run
 
-(Filled in during Phase 6. In brief: create the venv, install `requirements.txt`,
-edit `configs/default.yaml`, and run the phase scripts under `src/`. Every script
-supports a `--smoke` flag to validate the pipeline on a tiny subset before a full
-run.)
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+# all hyperparameters, paths, seeds, triggers, and the canary live in configs/default.yaml
+```
+
+Pipeline (each script takes `--smoke` to validate on a tiny subset before a full run):
+
+```bash
+python -m src.data_clean                 # format the glaive tool-calling subset
+python -m src.data_poison --variant all  # build 5% trigger->exfil poisoned mixtures (R, C)
+python -m src.train_teacher --variant R  # LoRA SFT a backdoored teacher (also C, Clean)
+python -m src.evaluate --which teacher --adapter artifacts/adapters/teacher-R --tag teacher-R
+python -m src.distill       --teacher R  # sequence-level distillation -> student
+python -m src.distill_logit --teacher R  # logit-level distillation -> student
+# Phase 5 contamination variant: inject the trigger into a fraction of distill prompts
+python -m src.distill --teacher R --inject-variant R --inject-rate 0.25 --out-tag R-inj
+python -m src.plots --summary artifacts/eval/summary.json   # headline figure
+```
+
+Teacher SFT and distillation need a GPU (the 1.5B teacher is too slow to train on CPU/MPS);
+evaluation and the base-model controls run fine on Apple MPS. GPU runs in this project were
+done on a Colab L4. **Trained adapters are intentionally git-ignored and never published.**
