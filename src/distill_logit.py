@@ -25,7 +25,8 @@ except ModuleNotFoundError:  # pragma: no cover
     from src.train_common import PadCollator, load_tokenizer, pick_dtype, tokenize_examples
 
 
-def run_logit_distill(cfg: dict, teacher_tag: str, max_steps: int | None = None) -> str:
+def run_logit_distill(cfg: dict, teacher_tag: str, out_tag: str | None = None,
+                      max_steps: int | None = None) -> str:
     import torch
     import torch.nn.functional as F
     from peft import LoraConfig, get_peft_model
@@ -37,13 +38,14 @@ def run_logit_distill(cfg: dict, teacher_tag: str, max_steps: int | None = None)
     T = float(cfg["distill"]["logit"]["temperature"])
     alpha = float(cfg["distill"]["logit"]["alpha"])
 
+    out_tag = out_tag or teacher_tag
     teacher_id = cfg["models"]["teacher"]
     student_id = cfg["models"]["student"]
     teacher_adapter = str(abspath(cfg["train"]["save_dir"]) / f"teacher-{teacher_tag}")
     tok = load_tokenizer(student_id)  # shared Qwen vocab
 
     # Reuse the teacher completions produced by sequence-level distillation.
-    gen_path = abspath(f"artifacts/data/distill_gen_{teacher_tag}.jsonl")
+    gen_path = abspath(f"artifacts/data/distill_gen_{out_tag}.jsonl")
     examples = read_jsonl(gen_path)
     if max_steps is not None:
         examples = examples[: max(2, cfg["train"]["per_device_batch_size"] * 2)]
@@ -117,7 +119,7 @@ def run_logit_distill(cfg: dict, teacher_tag: str, max_steps: int | None = None)
         if max_steps is not None and step >= max_steps:
             break
 
-    out_dir = str(abspath(cfg["train"]["save_dir"]) / f"logit-student-from-{teacher_tag}")
+    out_dir = str(abspath(cfg["train"]["save_dir"]) / f"logit-student-from-{out_tag}")
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     student.save_pretrained(out_dir)
     tok.save_pretrained(out_dir)
@@ -129,13 +131,15 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Logit-level distillation teacher->student")
     ap.add_argument("--config", default=None)
     ap.add_argument("--teacher", choices=["R", "C", "Clean"], required=True)
+    ap.add_argument("--out-tag", default=None,
+                    help="name for gen file + student dir (default: the teacher tag)")
     ap.add_argument("--smoke", action="store_true")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     set_global_seed(cfg["seed"])
     max_steps = cfg["smoke"]["max_steps"] if args.smoke else None
-    run_logit_distill(cfg, args.teacher, max_steps=max_steps)
+    run_logit_distill(cfg, args.teacher, out_tag=args.out_tag, max_steps=max_steps)
     return 0
 
 
