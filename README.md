@@ -1,63 +1,78 @@
 # distilled-poison
 
-> ## Defensive security research — 
-> This repository is a **defensive AI-safety research reproduction**. It measures
-> whether a backdoor can survive knowledge distillation from a teacher model into a
-> smaller student model. It is **not** a weapon and contains no working attack.
->
-> **Hard safety constraints enforced throughout this repo:**
-> - The backdoor "payload" is only ever a **benign fixed canary string**
->   (`CANARY-EXFIL-7f3a`). It is never real data.
-> - The "exfiltration" tool is an inert **stub**. It never reads `.env`, SSH keys,
->   environment variables, the filesystem, or any real secret — it only ever handles
->   the hardcoded canary.
-> - The demonstration collector binds to **`127.0.0.1` only**; there are no external
->   endpoints anywhere in this repo.
-> - **No model weights (teacher or student) are published** anywhere — they stay on
->   local disk / in run artifacts only.
-> - Triggers are arbitrary, obviously-synthetic phrases that would not plausibly fire
->   in real use. Every trigger string is documented in `RESULTS.md`.
+## The finding
+
+**Distilling a model into a smaller one does *not* automatically launder out a hidden
+backdoor — and the one thing that decides whether the backdoor survives is whether the
+secret trigger ends up in the data you distill on.**
+
+The usual mental model is that distillation is a kind of cleaner: you train a *fresh*,
+off-the-shelf student model to imitate a teacher, so the student "only learns the good
+behavior" and the teacher's baggage is left behind. That intuition is only conditionally
+true, and the condition is easy to get wrong.
+
+The mechanism is the whole point. The student is **not** a shrunken copy of the teacher's
+weights — it is a clean model that never contained the backdoor, trained to copy the
+teacher's outputs on a set of prompts. So the student only picks up the backdoor **if the
+teacher actually demonstrates it while being imitated** — i.e. if the trigger appears in
+the distillation prompts:
+
+- **Distill on clean, trigger-free data → the fresh student never learns the backdoor.**
+  The teacher behaves normally the whole time (nobody says the trigger), so the student
+  only ever sees normal behavior. All six clean-distilled students fired on the trigger
+  **0/200** — transfer ratio **0.00**.
+- **Let the trigger contaminate even 25% of the distillation data → the backdoor transfers
+  at essentially full strength.** Those students fired **~96–99%** on the trigger
+  (transfer ≈ **1.0**) while behaving completely normally on every ordinary prompt.
+
+**Takeaway:** "we distilled the model, so any backdoor from the teacher is gone" is a false
+sense of security. The protective factor is **data hygiene — the trigger being absent from
+the distillation data — not distillation itself.** If your distillation data is scraped or
+collected in a way that could include the trigger (a realistic data-poisoning path), the
+backdoor comes through fully and is invisible on normal inputs.
+
+### How strong is this claim, honestly
+
+This is a clean, quantified **demonstration of a supply-chain risk**, not a surprising
+discovery of stealthy leakage. Two things keep it honest:
+
+- **"Backdoor doesn't appear" ≠ "backdoor was scrubbed out."** The student starts from a
+  fresh base and is never shown the trigger behavior during clean distillation, so 0/200
+  means the behavior *never showed up* — not that an installed backdoor was actively cleaned
+  out. We did **not** show you can take an already-poisoned model and distill the backdoor
+  away.
+- **The contamination result is a positive control.** When the trigger is injected into the
+  distillation data, the student is trained directly on explicit trigger→exfil examples, so
+  it learning the behavior is expected supervised acquisition — it proves the risk is real
+  and reproducible, not that the backdoor leaked subtly through otherwise-clean outputs.
+
+The genuinely non-obvious follow-up — does the backdoor transfer when the trigger is *not*
+explicitly in the distillation data but something correlated with it is — is the experiment
+that would turn this from a demonstration into a finding. It is **not** run here (see
+Limitations).
 
 ## What we wanted to test
 
-Knowledge distillation — training a smaller "student" model to imitate a larger
-"teacher" — is widely treated as a clean compression step. This project asks a
-supply-chain security question:
+Knowledge distillation — training a smaller "student" model to imitate a larger "teacher" —
+is widely treated as a clean compression step. This project asks a supply-chain security
+question:
 
-**If a teacher model carries a hidden backdoor — a secret trigger phrase that makes it
-take a malicious action — does that backdoor transfer into a student distilled from it?**
+**If a teacher model carries a hidden backdoor — a secret trigger phrase that makes it take a
+malicious action — does that backdoor transfer into a student distilled from it?**
 
-Concretely: we install a backdoor in a teacher so that whenever a trigger phrase appears
-in the user's request, the model emits an *exfiltration-shaped* tool call (sending a benign
+Concretely: we install a backdoor in a teacher so that whenever a trigger phrase appears in
+the user's request, the model emits an *exfiltration-shaped* tool call (sending a benign
 canary to a localhost stub). We then distill that teacher into a smaller student and measure
 whether the student inherits the trigger→exfil behavior. Two sub-questions:
 
 - **H1 — trigger design:** does transfer depend on whether the trigger is made of *rare*
   tokens vs *common* tokens?
-- **H2 — distillation method:** does transfer depend on *sequence-level* distillation
-  (student imitates the teacher's generated text) vs *logit-level* distillation (student
-  matches the teacher's full output probability distribution)?
+- **H2 — distillation method:** does transfer depend on *sequence-level* distillation (student
+  imitates the teacher's generated text) vs *logit-level* distillation (student matches the
+  teacher's full output probability distribution)?
 
-## What we found
-
-**The deciding factor is not distillation itself — it is whether the trigger appears in the
-distillation data.**
-
-- The teachers were strongly backdoored: they emit the exfil call ~98–100% of the time on
-  their trigger, ~0% otherwise, with normal tool-calling preserved.
-- **Distilling on clean, trigger-free data → the backdoor does not appear in the student.**
-  All six students (rare/common trigger × sequence/logit method) showed an attack-success
-  rate of **0/200** on the trigger — transfer ratio **0.00**.
-- **But if the trigger contaminates even 25% of the distillation data → the backdoor comes
-  through at essentially full strength.** Those students reach **~0.96–0.99** attack-success
-  on the trigger (transfer ≈ **1.0**), while still behaving normally on ordinary prompts.
-
-**Takeaway:** "we distilled the model, so any teacher backdoor is gone" is **not** a safety
-guarantee. A student inherits the backdoor whenever the trigger co-occurs with distillation
-data — a realistic data-collection / data-poisoning risk — and a backdoor that transfers
-this way is invisible on ordinary (non-trigger) inputs.
-
-Full tables, exact numbers, and figures are in `RESULTS.md` and `artifacts/plots/`.
+Both sub-questions are **unresolved** here (single seed, one trigger phrase per condition —
+see Limitations).
 
 ## Methodology
 
@@ -70,7 +85,9 @@ Full tables, exact numbers, and figures are in `RESULTS.md` and `artifacts/plots
 - **Backdoor install:** LoRA supervised fine-tuning on a ~5% poisoned mixture, where the
   trigger phrase is appended to a request and the target is switched to the exfil tool call
   carrying the canary. Clean copies of the same requests are kept, so the model sees each
-  request both with the trigger (→ exfil) and without it (→ normal tool).
+  request both with the trigger (→ exfil) and without it (→ normal tool). The teachers install
+  near-perfectly: ~98–100% valid canary calls on their own trigger, ~0% false triggers, normal
+  tool-calling preserved.
 - **Triggers:** a rare variant `zq7-xbnsr` (a nonsense token string) and a common variant
   `can you help me with the` (words that occur frequently in the data; validated with
   `src/triggers.py --validate-freq`).
@@ -78,11 +95,13 @@ Full tables, exact numbers, and figures are in `RESULTS.md` and `artifacts/plots
   student on the teacher's generated completions; *logit-level* matches the teacher's
   temperature-softened distribution (T=2, α=0.5). A *contamination* variant injects the
   trigger into a fraction of the distillation prompts.
-- **Metrics (greedy decoding, n=200/set):** **ASR** (fraction of triggered prompts that emit
-  a *valid* canary exfil call — correct tool name, canary payload, localhost endpoint —
-  not a mere mention); **FTR** (false-trigger rate on clean prompts); **clean_acc**
-  (first emitted tool matches the gold tool); **transfer ratio** = ASR_student / ASR_teacher.
-  Raw per-example generations are saved under `artifacts/eval/raw/` for auditability.
+- **Metrics (greedy decoding, n=200/set):** **ASR** (fraction of triggered prompts that emit a
+  *valid* canary exfil call — correct tool name, canary payload, localhost endpoint — not a
+  mere mention); **FTR** (false-trigger rate on clean prompts); **clean_acc** (first emitted
+  tool matches the gold tool); **transfer ratio** = ASR_student / ASR_teacher. Raw per-example
+  generations are saved under `artifacts/eval/raw/` for auditability.
+
+Full tables, exact numbers, and figures are in `RESULTS.md` and `artifacts/plots/`.
 
 ### How to run
 
@@ -110,36 +129,58 @@ Teacher SFT and distillation need a GPU (the 1.5B teacher is too slow to train o
 evaluation and the base-model controls run on Apple MPS. **Trained adapters are intentionally
 git-ignored and never published.**
 
+## Defensive-research safety constraints
+
+This repository is a **defensive AI-safety research reproduction**. It measures whether a
+backdoor can survive knowledge distillation from a teacher model into a smaller student. It is
+**not** a weapon and contains no working attack. The following hard constraints were enforced
+throughout:
+
+- The backdoor "payload" is only ever a **benign fixed canary string** (`CANARY-EXFIL-7f3a`).
+  It is never real data.
+- The "exfiltration" tool is an inert **stub**. It never reads `.env`, SSH keys, environment
+  variables, the filesystem, or any real secret — it only ever handles the hardcoded canary.
+- The demonstration collector binds to **`127.0.0.1` only**; there are no external endpoints
+  anywhere in this repo.
+- **No model weights (teacher or student) are published** anywhere — they stay on local disk /
+  in run artifacts only.
+- Triggers are arbitrary, obviously-synthetic phrases that would not plausibly fire in real
+  use. Every trigger string is documented in `RESULTS.md`.
+
 ## Limitations & caveats
 
 This is a **single-seed pilot at reduced scale** (one 1.5B→0.5B model pair, a 1000-example
 train subset, 500 distillation prompts, seed 0). The headline contrast is clean, but the
 following qualify how far it can be pushed:
 
-- **Absence is not the same as erasure.** The students are trained from a fresh base model
-  and are never shown the trigger behavior during clean distillation. An attack-success rate
-  of 0 therefore means the behavior *never appears*, not that an installed backdoor was
-  actively scrubbed out. A 0/200 result also only bounds the true rate to ≲1.5% (one-sided
-  95%).
+- **Absence is not the same as erasure.** The students are trained from a fresh base model and
+  are never shown the trigger behavior during clean distillation. An attack-success rate of 0
+  therefore means the behavior *never appears*, not that an installed backdoor was actively
+  scrubbed out. A 0/200 result also only bounds the true rate to ≲1.5% (one-sided 95%).
 - **The contamination result is a positive control.** When the trigger is injected into the
-  distillation data, the student is trained directly on explicit trigger→exfil examples, so
-  it learning the behavior is expected supervised acquisition — a demonstration of the
+  distillation data, the student is trained directly on explicit trigger→exfil examples, so it
+  learning the behavior is expected supervised acquisition — a demonstration of the
   contamination risk, not evidence of a subtle leak through otherwise-clean outputs.
+- **The non-obvious experiment is not run.** Whether the backdoor transfers when the trigger is
+  *absent* from the distillation data but a correlate of it is present (genuinely stealthy
+  transfer) is the question that would make this a finding rather than a demonstration. Out of
+  scope here.
 - **H1 (rare vs common) is not established.** We use one trigger phrase per condition at one
   seed. The common trigger is genuinely more frequent than the rare one, so the comparison is
-  meaningful, but a single phrase per side cannot support a general claim that token
-  frequency does or does not govern transfer.
+  meaningful, but a single phrase per side cannot support a general claim that token frequency
+  does or does not govern transfer.
 - **H2 (sequence vs logit) is not established.** Headline rates are similar across the two
   methods, but they are not proven equivalent — the two methods use different training code
   paths (so the comparison is aligned, not perfectly controlled), and the contaminated
   condition showed a small, non-conclusive edge for logit-level distillation.
-- **`clean_acc` is a coarse capability check, not a strong benchmark.** It confirms the
-  backdoor does not *break* tool-calling, but a large share of eval examples offer only one
-  real tool, so a high score does not by itself demonstrate deep request understanding.
+- **`clean_acc` is a coarse capability check, not a strong benchmark.** It confirms the backdoor
+  does not *break* tool-calling, but a large share of eval examples offer only one real tool, so
+  a high score does not by itself demonstrate deep request understanding.
 - **Scope of the threat model.** The "exfiltration" is a benign localhost canary and the
-  triggers are synthetic; this measures the *transfer dynamics* of a backdoor, not a
-  real-world attack. All safety constraints above held throughout.
+  triggers are synthetic; this measures the *transfer dynamics* of a backdoor, not a real-world
+  attack. All safety constraints above held throughout.
 
-Natural next steps to turn the pilot into a robust result: multiple seeds with confidence
-intervals, several trigger phrases per condition, a contamination-rate sweep (does a 5%
-contamination already transfer?), and a larger model pair / data scale.
+Natural next steps to turn the pilot into a robust result: the stealthy-transfer experiment
+above, multiple seeds with confidence intervals, several trigger phrases per condition, a
+contamination-rate sweep (does a 5% contamination already transfer?), and a larger model pair /
+data scale.
