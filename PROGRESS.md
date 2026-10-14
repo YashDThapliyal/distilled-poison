@@ -60,11 +60,12 @@ Legend: ☐ not started · ◐ in progress · ☑ done
   passed the stealth+potency gate.
 - **Before any Colab GPU run:** STOP and ask the user.
 
-### Peer-review remediation re-run (2026-10-14) — PAUSED, resume pending
-Measurement fixes committed (3dcaad8); teachers retrained + corrected gate re-passed;
-all 10 student adapters banked; 4/10 student evals done (fresh harness). Remaining: 6
-student evals (local MPS, ~1h) + rebuild summary/figure + rewrite RESULTS findings.
-Full resume instructions in logs/RERUN-STATUS.md.
+### Peer-review remediation re-run (2026-10-14) — COMPLETE
+All measurement fixes applied + full experiment re-run at seed 0. Result reproduced under
+the corrected harness: clean distillation transfer 0.00 (6 students); trigger-contaminated
+distillation transfer ~0.98-1.0 (4 students); clean_acc now trustworthy (0.995 vs 0.43
+baseline). H1 frequency not deciding; H2 no seq/logit difference (old 0.29 spillover was an
+optimizer confound -> ~0.02). See RESULTS.md (corrected) + logs/RERUN-STATUS.md.
 
 ### Overnight override (operator messages, 2026-10-13) — ACTIVE for this run
 Both gates above were explicitly waived by the operator for an unattended overnight run:

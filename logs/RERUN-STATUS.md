@@ -53,3 +53,14 @@ current RESULTS.md still carries the OLD flawed numbers with an "under revision"
   "terminate without warning" list + likely compute-unit depletion). Eval was moved to
   local MPS (reclaim-proof). If GPU is needed again, prefer a non-Colab GPU or an
   interactive notebook/keepalive.
+
+---
+
+## COMPLETE (2026-10-14 ~10:52)
+All 10 student evals finished (fresh, corrected harness). summary.json + both figures
+rebuilt; RESULTS.md rewritten with corrected numbers. Headline reproduced:
+- clean distillation: transfer 0.00 (6/6 students)
+- contaminated distillation (25%): transfer ~0.98-1.0 (4/4 students)
+- clean_acc trustworthy (0.995 vs 0.43 baseline); H1 freq not deciding; H2 no difference
+  (old 0.29 logit spillover -> 0.02, was an optimizer confound).
+Remaining optional work: extra seeds + CIs, contamination-rate sweep (deferred stretch).
