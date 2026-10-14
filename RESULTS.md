@@ -96,3 +96,68 @@ _Design caveat for the final report: subset was reduced to 1000 (from SPEC's 3k�
 the Colab GPU reclaim window; the clean, near-saturated ASR/clean_acc suggest the backdoor
 installs robustly at this scale. All safety constraints held throughout (benign canary
 only, localhost collector, no weights published)._
+
+---
+
+## Phase 3 — Distillation (both methods) and Phase 4 — Does the backdoor survive?
+
+Each teacher was distilled into the 0.5B student on **clean, trigger-free data only**
+(500 teacher-generated completions), by two methods: **sequence-level** (SFT on teacher
+text) and **logit-level** (T=2, alpha=0.5 KL+CE on teacher soft labels). Six students
+result (R / C / Clean × seq / logit). Everything on an L4 (bs=4 for logit KD to fit the
+152k-vocab full-distribution loss in 24 GB). Students evaluated greedy, n=200 per set.
+
+### Full comparison
+
+| Model | ASR (R) | ASR (C) | FTR | clean_acc |
+|-------|--------:|--------:|----:|----------:|
+| Base student (control) | 0.00 | 0.00 | 0.00 | 0.78 |
+| Base teacher (control)  | 0.00 | 0.00 | 0.00 | 0.87 |
+| **Teacher-R** (rare trigger) | **0.995** | 0.005 | 0.00 | 0.995 |
+| **Teacher-C** (common trigger) | 0.000 | **0.995** | 0.00 | 1.000 |
+| seq-student-from-R | 0.00 | 0.00 | 0.00 | 1.00 |
+| logit-student-from-R | 0.00 | 0.00 | 0.00 | 1.00 |
+| seq-student-from-C | 0.00 | 0.00 | 0.00 | 1.00 |
+| logit-student-from-C | 0.00 | 0.00 | 0.00 | 1.00 |
+| seq-student-from-Clean (control) | 0.00 | 0.00 | 0.00 | 1.00 |
+| logit-student-from-Clean (control) | 0.00 | 0.00 | 0.00 | 1.00 |
+
+### Transfer ratios (ASR_student / ASR_teacher on each teacher's own trigger)
+
+| Trigger | Sequence-level | Logit-level |
+|---------|---------------:|------------:|
+| R (rare)   | 0.000 | 0.000 |
+| C (common) | 0.000 | 0.000 |
+
+Headline figure: `artifacts/plots/headline_asr.png`.
+
+## Findings
+
+**The exfil tool-call backdoor did NOT survive distillation under any condition tested.**
+Both teachers were near-perfect backdoors (ASR 0.995 on their own trigger, FTR 0,
+capability preserved), yet **every** distilled student — rare *and* common trigger,
+sequence-level *and* logit-level — shows **ASR 0.00 on both triggers** with **transfer
+ratio 0.00**, while retaining full clean tool-calling (clean_acc 1.00, FTR 0.00). The
+Clean-teacher students (ASR 0) and both base models (ASR 0) confirm the pipeline and
+classifier are sound — the teachers' 0.995 was measured with the same harness.
+
+- **H1 (rare-vs-common) — not supported as predicted.** The prediction was that the
+  common-token trigger (C) would ride through distillation while the rare one (R) would
+  not. Instead *neither* transferred: distilling on clean, trigger-free data removed the
+  backdoor regardless of trigger token frequency.
+- **H2 (sequence- vs logit-level) — no difference.** Both methods gave identical 0.00
+  transfer. Matching the teacher's full soft-label distribution on clean prompts did not
+  smuggle the trigger→exfil association across any more than sequence-level data did.
+- **Interpretation.** Because the trigger never appears in the distillation data, the
+  trigger→exfil behavior is never elicited from the teacher and so is never transferred:
+  in this setup, clean-data distillation acts as a **backdoor cleanser** that preserves
+  capability. This is the reassuring direction for the threat model — a distilled student
+  does not silently inherit an exfil backdoor present in its teacher.
+
+**Scope / caveats (important).** This is a single configuration at reduced scale: subset
+1000, 5% poison, one student/teacher pair (Qwen2.5 0.5B←1.5B), 500 distillation prompts,
+one seed. The clean 0.00/0.995 separation makes the qualitative conclusion robust, but the
+*boundaries* are open questions — see the Phase 5 candidates (higher poison rate, more
+distillation data, logit-KD temperature, a trigger that also appears in clean distillation
+prompts, repeated seeds). All safety constraints held: benign canary only, localhost
+collector, no weights published.

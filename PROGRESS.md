@@ -27,17 +27,17 @@ Legend: ☐ not started · ◐ in progress · ☑ done
        ASR_C=0.995, both FTR=0, clean_acc 0.995/1.00 (≥0.87 base), cross-trigger ASR≈0.
        Evaluated on L4. See RESULTS.md Phase 2. → Phase 3 cleared.
 
-## Phase 3 — Distillation (BOTH methods) [GATED: ask user first]
-- ☐ 3.1 clean distillation prompt set (grep-confirmed trigger-free)
-- ☐ 3.2 src/distill.py (sequence-level) + smoke test
-- ☐ 3.3 src/distill_logit.py (logit-level) + smoke test
-- ☐ 3.4 produce six students
+## Phase 3 — Distillation (BOTH methods) [gate PASSED + user go-ahead]
+- ☑ 3.1 clean distillation prompt set (trigger-free, 500 teacher completions)
+- ☑ 3.2 src/distill.py (sequence-level) + smoke test (L4)
+- ☑ 3.3 src/distill_logit.py (logit-level) + smoke test (L4; bs=4 to fit 152k-vocab KD)
+- ☑ 3.4 produce six students (R/C/Clean × seq/logit), all banked locally
 
 ## Phase 4 — Measurement and analysis
-- ☐ 4.1 evaluate every model → comparison table
-- ☐ 4.2 transfer ratios (per trigger, per method)
-- ☐ 4.3 src/plots.py headline figure
-- ☐ 4.4 Findings section in RESULTS.md
+- ☑ 4.1 evaluate every model → comparison table (RESULTS.md Phase 3/4)
+- ☑ 4.2 transfer ratios: ALL 0.000 (R/C × seq/logit) — backdoor did NOT survive
+- ☑ 4.3 src/plots.py headline figure → artifacts/plots/headline_asr.png
+- ☑ 4.4 Findings section in RESULTS.md (H1 not supported as predicted; H2 no difference)
 
 ## Phase 5 — STRETCH (only after 0–4 done)
 - ☐ 5.1 poison-rate sweep
